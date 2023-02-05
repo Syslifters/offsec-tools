@@ -1,4 +1,4 @@
-<img align="left" width="300" src="https://docs.syslifters.com/images/Logo.svg" />
+<img align="left" width="350" src="https://docs.syslifters.com/images/Logo.svg" />
 
 # OffSec Tools
 This repository is meant for pentesters, red-teamers and everyone else using a variety of offensive security tools during engagements. 
