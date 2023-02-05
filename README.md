@@ -8,4 +8,5 @@ We regularily fetch and compile the newest version of each tool and provide them
 You do not have to hassle with updating and compiling the tools yourself. 
 Just download the latest release and find all tools that you will need in one single archive. 
 
-Happy Hacking!
+Happy Hacking!  
+Team Syslifters
