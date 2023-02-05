@@ -1,4 +1,4 @@
-<img align="left" width="350px" src="https://docs.syslifters.com/images/Logo.svg">
+<img align="left" width="400px" src="https://docs.syslifters.com/images/Logo.svg">
 
 # OffSec Tools
 This repository is meant for pentesters, red teamers and everyone else using a variety of offensive security tools during engagements. The repo is a collection of usefool tools suitable for audits in internal environments. We regularily fetch and compile the newest version of each tool and provide them to you as release.
