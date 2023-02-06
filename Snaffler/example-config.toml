@@ -1,0 +1,73 @@
+# Snaffler Sample Config File
+
+## Resource Use Options
+# This is a bit of a balancing act and maximising performance will depend somewhat on your environment and how much RAM you're willing to consume.
+# More threads will obviously need more CPU and lots more ram, where increasing the queue sizes will have a dramatic impact on ram usage.
+# These values should limit RAM usage to between 500-1000MB.
+#
+# The most important thing is that you generally want a lot more threads allocated to filescanning compared to the other two. 
+#
+# Think about it this way:
+# A completed sharefinder task will create a number of new treewalker tasks equal to the number of readable shares on the target computer. Most of the time this will be zero, it will rarely be more than a few hundred.
+# A treewalker task will create a number of new filescanner tasks equal to the number of readable files on the target filesystem. This could be anywhere between zero and *millions*.
+# Filescanner tasks don't create new tasks, when they finish that's the end of the road.
+#
+# With this in mind I hope it's obvious that to keep things flowing along nicely you want to make sure the filescanner queues are getting cleared out at a decent pace. Everything else should flow on from that.
+
+ShareThreads = 30 # number of threads to allocate to checking domain computers for readable file shares, i.e. share-finder tasks
+TreeThreads = 20 # number of threads to allocate to walking the directory structures of shares to find all the files, i.e. tree-walker tasks.
+FileThreads = 50 # number of threads to allocate to checking files to determine if they should be snaffled, i.e. file-scanner tasks.
+MaxShareQueue = 20000 # Upper limit of share-finder tasks to put in the queue before we wait for some to be cleared out.
+MaxTreeQueue = 20000 # Upper limit of tree-walker tasks to put in the queue before we wait for some to be cleared out.
+MaxFileQueue = 200000 # Upper limit of file-scanner tasks to put in the queue before we wait for some to be cleared out.
+
+## Output options
+# These control where the output goes, e.g. to stdout/console, a file, etc.
+LogToFile = false # whether or not to log output to a file.
+# LogFilePath = "C:\\example" # what file to log output to.
+LogToConsole = true # whether or not to send output to stdout 
+LogLevelString = "info" # how verbose to be. options include: 
+# "data" which will only show actual results.
+# "info" (which is the default) which will tell you some basic stuff about what snaffler is doing.
+# "degub" (or "debug" if you prefer) which will show some debugging info too.
+# "trace" which will be insanely noisy and throw errors all over the joint.
+LogType = "Plain" # accepts either "plain" or "json", with self-explanatory results. Only affects file output, console output will remain plain.
+LogTSV = false # enables use of TSV for console/plain output.
+Separator = 32 # change this to a different byte to get a different character as your field separator instead of TAB.
+LogDeniedShares = false # if set to true, output will include shares that exist but you can't look inside.
+Snaffle = false # if set to true, this will actually retrieve (or SNAFFLE if you will...) a copy of files that are deemed worthy by a filescanner task.
+MaxSizeToSnaffle = 10000000 # obviously we don't want to download a 200GB full disk backup of a DC to your 40GB testing VM, so this is an upper limit on file size to 'snaffle' in bytes.
+# SnafflePath = "C:\\snaffleout" # the path that snaffled files will be put in. We'll reproduce the directory structure that they were found in so you should be able to figure out where they came from even if you lose the log file.
+
+## Targeting options
+# TargetDomain = "target.tld" # the domain to target. You'll want to set this and TargetDC if you're running Snaffler with `runas /netonly` or whatever, but by default Snaffler should figure this out on its own.
+# TargetDC = "dc01.target.tld" # the DC to query for computers and users. By default Snaffler should figure this out on its own.
+ShareFinderEnabled = true # whether to query the AD domain for computers and then search those computers for readable shares. 
+# If you set ShareFinderEnabled to false you'll need to set a value in ComputerTargets or PathTargets
+# ComputerTargets = ["computer1", "computer2"] # which computers to discover shares on, skipping AD computer discovery.
+# PathTargets = ["\\\\host.lol.domain\\share"] # which paths to search, skipping computer/share discovery.
+ComputerTargetsLdapFilter = "(objectClass=computer)" # the ldap filter used to search AD for computer objects.
+ScanSysvol = true # enables scanning of the domain SYSVOL share. Will only scan it once even if multiple domain controllers are scanned.
+ScanNetlogon = true # enables scanning of the domain NETLOGON share. Will only scan it once even if multiple domain controllers are scanned.
+ScanFoundShares = true
+InterestLevel = 0
+DfsOnly = false
+DfsShareDiscovery = false
+DfsNamespacePaths = []
+CurrentUser = "l0sslab\\l0ss"
+
+#######################################
+
+DomainUserRules = false # whether to fetch a list of domain users, filter out highly privileged ones and accounts that seem to be service accounts, and add them to one or more rules.
+DomainUserMinLen = 6 # minimum length for account names.
+DomainUserNameFormats = ["sAMAccountName"] # which attribute to filter on, i.e. Display Name vs sAMAccountName, etc.
+DomainUserMatchStrings = ["sql", "svc", "service", "backup", "ccm", "scom", "opsmgr", "adm", "adcs", "MSOL", "adsync", "thycotic", "secretserver", "cyberark", "configmgr"] # we don't want every user in the domain, that would take forever. Only usernames including these strings will be included in the search.
+DomainUsersWordlistRules = ["KeepConfigRegexRed"] # which rule(s) to add the resulting usernames to.
+####################################### 
+MaxSizeToGrep = 1000000 # the maximum size file in bytes that we should look inside. Reducing this number will reduce memory usage and substantially speed things up, but will potentially skip a lot of interesting stuff
+MatchContextBytes = 200 # how many bytes of 'context' to show on either side of a match inside a file.
+
+## Rules
+# This defines what we're going to actually look for. See README.md for details.
+RuleDir = "C:\\users\\someguy\\myrules" # Will make Snaffler look for .toml rule files in that dir. These rules will entirely replace the default set, not add to them.
+
