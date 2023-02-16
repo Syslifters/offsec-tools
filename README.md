@@ -1,9 +1,9 @@
 <img align="left" width="400px" src="https://docs.syslifters.com/images/Logo.svg">
 
 # OffSec Tools
-This repository is meant for pentesters, red teamers and everyone else using a variety of offensive security tools during engagements. The repo is a collection of useful tools suitable for audits in internal environments. We regularily fetch and compile the newest version of each tool and provide them to you as release.
+This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We regularly fetch and compile the latest version of each tool and make it available to you as a release.
 
-You do not have to hassle with updating and compiling the tools yourself. Just download the latest release and find all tools that you will need in one single archive.
+You don't have to worry about updating and compiling the tools yourself. Just download the latest version and find all the tools you need in a single archive.
 
 Happy Hacking!  
 Team Syslifters
