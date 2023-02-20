@@ -13,8 +13,10 @@ Happy Hacking! :)
 <br/>
 ## FAQ
 ### Which version of the tools do you use?
-When creating a release, we use the latest version from the official repository of the respective tool. You can check the version in the respective commit message, which points to the latest commit version in the official repository.
+When creating a release, we use the latest version from the official repository of the respective tool. You can check the version in the respective commit message, which points to the latest commit in the official repository.
 
 ### How often do you plan to create a release?
 We have fully automated the steps required to create a release using a build pipeline. We therefore plan to create a release once a week.
 
+### I am missing an awesome tool, what should I do?
+Just let us know! Open an issue with a link to the repository you want to add. We'll have a look and add it if it's a reasonable fit.
