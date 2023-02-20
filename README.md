@@ -13,7 +13,7 @@ Happy Hacking! :)
 <br/>
 ## FAQ
 ### Why do you do that?
-Many OffSec tools are shipped with their source code only and therefore need to be compiled manually. This is a very time-consuming task, especially if you always want to use the latest version of your tool palette during assessments. Better save the time for more important things, right?
+Many OffSec tools are shipped with their source code only and therefore need to be compiled manually. This is a very time-consuming task, especially if you want to keep your tools up to date before doing assessments. Better save the time for more important things, right?
 
 ### Did you backdoor the tools?
 No. Cross my heart and hope to die.
