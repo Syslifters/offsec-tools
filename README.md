@@ -9,7 +9,7 @@ You are missing tools? Well, just open an issue and we will add it.
 
 
 Happy Hacking! :)  
-<b>Team Syslifters</b>
+<b>Team Syslifters</b>🦖
 <br/>
 <br/>
 ## FAQ
