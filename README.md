@@ -12,6 +12,12 @@ Happy Hacking! :)
 <br/>
 <br/>
 ## FAQ
+### Why do you do that?
+Many OffSec tools are shipped with their source code only and therefore need to be compiled manually. This is a very time-consuming task, especially if you always want to use the latest version of your tool palette during assessments. Better save the time for more important things, right?
+
+### Did you backdoor the tools?
+No. Cross my heart and hope to die.
+
 ### Which version of the tools do you use?
 When creating a release, we use the latest version from the official repository of the respective tool. You can check the version in the commit message, which points to the latest commit in the official repository.
 
