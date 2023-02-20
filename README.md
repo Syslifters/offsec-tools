@@ -5,5 +5,7 @@ This repository is intended for pentesters and red teamers using a variety of of
 
 You don't have to worry about updating and compiling the tools yourself. Just download the latest version and find all the tools you need in a single archive.
 
-Happy Hacking!  
+You are missing tools? Well, just open an issue and we will add it.
+
+Happy Hacking! :)
 Team Syslifters
