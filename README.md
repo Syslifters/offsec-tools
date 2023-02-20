@@ -3,7 +3,7 @@
 # OffSec Tools
 This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We fetch and compile the latest version of each tool on a regular basis and provide it to you as a release.
 
-You don't have to worry about updating and compiling the tools yourself. Just download the latest version and find all the tools you need in a single archive.
+You don't have to worry about updating and compiling the tools yourself. Just download the latest release and find all the awesome tools you will need in a single archive.
 
 Happy Hacking! :)  
 <b>Team Syslifters</b> 🦖
