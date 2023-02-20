@@ -10,6 +10,7 @@ Happy Hacking! :)
 <br/>
 <br/>
 <br/>
+<br/>
 ## FAQ
 ### Which version of the tools do you use?
 When creating a release, we use the latest version from the official repository of the respective tool. You can check the version in the commit message, which points to the latest commit in the official repository.
