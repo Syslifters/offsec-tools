@@ -7,11 +7,14 @@ You don't have to worry about updating and compiling the tools yourself. Just do
 
 You are missing tools? Well, just open an issue and we will add it.
 
-
 Happy Hacking! :)  
-<b>Team Syslifters</b>🦖
+<b>Team Syslifters</b> 🦖
 <br/>
 <br/>
 ## FAQ
 ### Which version of the tools do you use?
-When building a release, we use the most recent version of each tool's official repository. You can verify the version in the respective commit message which links to the latest commit in the official repo.
+When creating a release, we use the latest version from the official repository of the respective tool. You can check the version in the respective commit message, which points to the latest commit version in the official repository.
+
+### How often do you plan to create a release?
+We have fully automated the steps required to create a release using a build pipeline. We therefore plan to create a release once a week.
+
