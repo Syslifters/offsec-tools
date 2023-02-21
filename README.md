@@ -19,7 +19,10 @@ Many OffSec tools are shipped with their source code only and therefore need to 
 We don't want to rack our brains every time before an assessment about which tools we need. A release conveniently contains all the tools we need for the assessment as a collection. Noice!
 
 ### Did you backdoor the tools?
-No. Cross my heart and hope to die.
+No. Cross our heart and hope to die.
+
+### Nah, still don't trust you guys. Can't we build it ourselves?
+Oh man, we don't blame you. It's the lot of the security industry. But if you're motivated, you can also create your own build pipeline. We'd be happy to show you how to do that. Instructions and our gitlab-ci.yml will follow shortly.
 
 ### Which version of the tools do you use?
 When creating a release, we use the latest version from the official repository of the respective tool. You can check the version in the commit message, which points to the latest commit in the official repository.
