@@ -15,7 +15,7 @@ Happy Hacking! :)
 ### Why do you do that?
 Many OffSec tools are shipped with their source code only and therefore need to be compiled manually. This is a very time-consuming task, especially if you want to keep your tools up to date before doing assessments. Better save the time for more important things, right?
 
-### Duh, but you also put PowerShell scripts in there. Why?
+### Duhh, but you also put PowerShell scripts in releases. Why?
 We don't want to rack our brains every time before an assessment about which tools we need. A release conveniently contains all the tools we need for the assessment as a collection. Noice!
 
 ### Did you backdoor the tools?
