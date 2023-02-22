@@ -6,7 +6,8 @@ This repository is intended for pentesters and red teamers using a variety of of
 You don't have to worry about updating and compiling the tools yourself. Just download the latest release and find all the awesome tools you will need in a single archive.
 
 Happy Hacking! :)  
-<b>Team Syslifters</b> 🦖
+<b>Team Syslifters</b> 🦖  
+<a href="https://syslifters.com">https://syslifters.com</a>
 <br/>
 <br/>
 <br/>
