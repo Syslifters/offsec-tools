@@ -10,7 +10,7 @@ Happy Hacking! :)
 <a href="https://syslifters.com">https://syslifters.com</a>
 <br>
 <br>
-Looking for a proper pentest reporting tool? Checkout <a href="https://docs.sysreptor.com">SysReptor</a>. 🚀 
+P.S. looking for a pentest reporting tool? Checkout <a href="https://docs.sysreptor.com">SysReptor</a>. 🚀 
 <br/>
 <br/>
 <br/>
