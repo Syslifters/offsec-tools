@@ -1,4 +1,4 @@
-<img align="left" width="300px" height="400px" src="https://docs.syslifters.com/images/Logo.svg">
+<img align="left" width="350px" height="450px" src="https://docs.syslifters.com/images/Logo.svg">
 
 # OffSec Tools
 This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We fetch and compile the latest version of each tool on a regular basis and provide it to you as a release.
@@ -8,6 +8,9 @@ You don't have to worry about updating and compiling the tools yourself. Just do
 Happy Hacking! :)  
 <b>Team Syslifters</b> 🦖  
 <a href="https://syslifters.com">https://syslifters.com</a>
+<br>
+<br>
+P.S. looking for a proper pentest reporting tool? Checkout <a href="https://docs.sysreptor.com">SysReptor</a>. 🚀 
 <br/>
 <br/>
 <br/>
