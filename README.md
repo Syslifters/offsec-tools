@@ -13,7 +13,6 @@ Happy Hacking! :)
 <br>
 <h3 align="center">🔎 PS. looking for a proper pentest reporting tool?</h3>
 <h4 align="center">:rocket: Checkout <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h4>
-<h4 align="center">:bulb: Have a look at our documentation <a class="md-button" href="https://docs.sysreptor.com/">here</a></h4>
 <br/>
 <br>
 
