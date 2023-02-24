@@ -67,6 +67,8 @@ In the GitLab Runner installation directory, define the following settings in th
 - Visual Studio 2019 or up
 - Visual Studio 2013 (required by some tools)
 - nuget ([https://www.nuget.org/downloads](https://www.nuget.org/downloads))
+- Python ([https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/))
+- Pyinstaller ([https://pyinstaller.org/en/stable/installation.html](https://pyinstaller.org/en/stable/installation.html))
 
 ### 3.3 Set/Modify environment variables
 Set/modify the following environment variables. You may need to restart the Gitlab Runner service for the changes to take effect.
