@@ -67,15 +67,17 @@ In the GitLab Runner installation directory, define the following settings in th
 - Visual Studio 2019 or up
 - Visual Studio 2013 (required by some tools)
 - nuget ([https://www.nuget.org/downloads](https://www.nuget.org/downloads))
-- Python ([https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/))
-- Pyinstaller ([https://pyinstaller.org/en/stable/installation.html](https://pyinstaller.org/en/stable/installation.html))
+- python ([https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/))
+- PyInstaller ([https://pyinstaller.org/en/stable/installation.html](https://pyinstaller.org/en/stable/installation.html))
 
 ### 3.3 Set/Modify environment variables
 Set/modify the following environment variables. You may need to restart the Gitlab Runner service for the changes to take effect.
 
 * **PATH**
-  1. Add installation path of _MSBuild.exe_ of Visual Studio 2019 or up. E.g. `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin`
-  2. Add installation path of _nuget.exe_
+  1. Add installation path for _MSBuild.exe_ of Visual Studio 2019 or up. E.g. `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin`
+  2. Add installation path for _nuget.exe_
+  3. Add installation path for python. E.g. `C:\Program Files\Python310`
+  4. Add installation path for PyInstaller. E.g. `C:\Program Files\Python310\Scripts`
 
 * **MSBUILD_VS13**\
 Create a new environment variable _MSBUILD_VS13_ and set its value to the installation path of MSBuild.exe of Visual Studio 2013. E.g. `C:\Program Files (x86)\MSBuild\12.0\Bin`
