@@ -10,11 +10,13 @@ Happy Hacking! :)
 <a href="https://syslifters.com">https://syslifters.com</a>
 <br>
 <br>
-<br>
+<p align="center">
+    <a href="https://docs.sysreptor.com"><img width="70" src="https://github.com/cmahrl/OSCP-Reporting/blob/main/logo-invert.svg" alt="Logo SysReptor"></a>
+</p>
 <h3 align="center">🔎 PS. looking for a proper pentest reporting tool?</h3>
 <h4 align="center">:rocket: Checkout <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h4>
 <br/>
-<br>
+<br/>
 
 ## FAQ
 ### Why do you do that?
