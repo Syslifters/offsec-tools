@@ -7,7 +7,7 @@ This how-to provides instructions for setting up the OffSec Tools Build Pipeline
 * Remote Repository hosted on GitHub or a GitLab instance
 
 ## 1. Create a new project
-Create a new project on your GitLab instance and add the [.gitlab-ci.yml](gitlab-ci.yml) to the root of your project. The only function of this project is to build the tools defined in the CI script and push the repositories and compiled tools to a dedicated remote repository.
+Create a new project on your GitLab instance and add the [.gitlab-ci.yml](gitlab-ci.yml) to the root of your project. The only purpose of this project is to build the tools defined in the CI script and push the repositories as well as compiled tools to a dedicated remote repository.
 
 ## 2. Create a new personal access token
 Create a personal access token for the remote repository where the repositories and compiled tools will be pushed to. See official [documentation](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) on how to do that for GitHub.
