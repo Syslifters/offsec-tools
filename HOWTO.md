@@ -57,9 +57,8 @@ Hint: you will find the registration token in the _CI/CD Settings_ in the _Speci
 .\gitlab-runner.exe start
 ```
 
-
 ### 3.2 Edit config.toml
-In the GitLab Runner installation directory, define the following settings in the _config.toml_ configuration file as follows
+In the GitLab Runner installation directory, define the following settings in the _config.toml_ configuration file as follows:
 
 * **executor**: shell
 * **shell**: powershell
