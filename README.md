@@ -1,4 +1,4 @@
-<img align="left" width="275px" height="500px" src="https://docs.syslifters.com/images/Logo.svg">
+<img align="left" width="80px" height="80px" src="https://user-images.githubusercontent.com/7896159/220596940-eaccedd8-979d-46eb-a014-e4082d7bf725.png">
 
 # OffSec Tools
 This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We fetch and compile the latest version of each tool on a regular basis and provide it to you as a release.
@@ -10,12 +10,13 @@ Happy Hacking! :)
 <a href="https://syslifters.com">https://syslifters.com</a>
 <br>
 <br>
-PS. looking for a proper pentest reporting tool? Checkout <a href="https://docs.sysreptor.com">SysReptor</a> 🚀 
+<br>
+<h3 align="center">🔎 PS. looking for a proper pentest reporting tool?</h3>
+<h4 align="center">:rocket: Checkout <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h4>
+<h4 align="center">:bulb: Have a look at our documentation <a class="md-button" href="https://docs.sysreptor.com/">here</a></h4>
 <br/>
-<br/>
-<br/>
-<br/>
-<br/>
+<br>
+
 ## FAQ
 ### Why do you do that?
 Many OffSec tools are shipped with their source code only and therefore need to be compiled manually. This is a very time-consuming task, especially if you want to keep your tools up to date before doing assessments. Better save the time for more important things, right?
