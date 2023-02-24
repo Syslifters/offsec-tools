@@ -85,5 +85,5 @@ Create a schedule in GitLab to repeatedly trigger the pipeline. This is very pra
 ## FINISH 🏁
 Your build pipeline should now be ready. You can manually trigger the build pipeline in the GitLab CI/CD view. This will cause the Windows GitLab Runner to retrieve the repositories in the CI script, compile them and commit everything to the remote repository you specified. Each time you trigger the pipeline, it also creates a release with all the compiled tools.
 
-Happy Compiling and Hacking!
+Happy Compiling and Hacking!  
 Team Syslifters 🦖
