@@ -17,7 +17,7 @@ Scopes needed for personal access token:
 - write_repository
 
 ## 2. Define necessary CI/CD variables
-Define the following CI/CD variables in your GitLab project. They will be needed in order to successfully run the CI script.
+Define the following CI/CD variables in your GitLab project. They are needed to run the CI script successfully.
 
 * **CI_PROJECT_PATH**: Project path of remote repository to push the tools into (e.g. `/Syslifters/offsec-tools.git`)
 * **CI_SERVER_HOST**: Hostname of the GitLab/GitHub instance (e.g. `github.com`)
