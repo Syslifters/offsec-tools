@@ -24,6 +24,9 @@ Happy Hacking! :)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Syslifters/offsec-tools?color=green&style=flat-square)
 ![GitHub Release Date - Published_At](https://img.shields.io/github/release-date/Syslifters/offsec-tools?color=blue&style=flat-square)
 ![GitHub repo size](https://img.shields.io/github/repo-size/Syslifters/offsec-tools?color=red&style=flat-square)
+<a href="https://www.linkedin.com/company/syslifters/">
+    <img src="https://img.shields.io/badge/-Linkedin-blue?style=flat-square&logo=linkedin">
+</a>
 <br/>
 <br/>
 
