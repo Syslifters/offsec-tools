@@ -29,7 +29,7 @@ Happy Hacking! :)
 <a href="https://github.com/Syslifters/offsec-tools/releases/latest">
     <img src="https://img.shields.io/github/release-date/Syslifters/offsec-tools?color=blue&style=flat-square">
 </a>
-<a href="https://github.com/Syslifters/offsec-tools/">
+<a href="https://github.com/Syslifters/offsec-tools/releases/latest">
     <img src="https://img.shields.io/github/repo-size/Syslifters/offsec-tools?color=red&style=flat-square">
 </a>
 <a href="https://www.linkedin.com/company/syslifters/">
