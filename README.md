@@ -17,6 +17,15 @@ Happy Hacking! :)
 <h4 align="center">:rocket: Checkout <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h4>
 <br/>
 <br/>
+<br/>
+<br/>
+
+![GitHub Repo stars](https://img.shields.io/github/stars/Syslifters/offsec-tools?color=yellow&style=flat-square)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/Syslifters/offsec-tools?color=green&style=flat-square)
+![GitHub Release Date - Published_At](https://img.shields.io/github/release-date/Syslifters/offsec-tools?color=blue&style=flat-square)
+![GitHub repo size](https://img.shields.io/github/repo-size/Syslifters/offsec-tools?color=red&style=flat-square)
+<br/>
+<br/>
 
 ## FAQ
 ### Why do you do that?
