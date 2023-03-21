@@ -115,6 +115,8 @@ build_mimikatz:
     - Expand-Archive .\mimikatz_trunk.zip
     - cp -Recurse $ROOT_DIR\$REPO_DIR\x64\ $BIN_DIR\mimikatz\ 
     - cp -Force .\mimikatz_trunk\x64\mimidrv.sys $BIN_DIR\mimikatz\mimidrv.sys
+    - Remove-Item -Recurse -Force .\mimikatz_trunk.zip
+    - Remove-Item -Recurse -Force .\mimikatz_trunk
 
 
 build_rubeus:
@@ -309,7 +311,7 @@ create_release:
   script:
     - git clone "https://${GIT_USERNAME}:${GIT_TOKEN}@${CI_SERVER_HOST}${CI_PROJECT_PATH}" "${CI_COMMIT_SHA}"
     - cd "${CI_COMMIT_SHA}"
-    - Compress-Archive -Path $BIN_DIR -DestinationPath $BIN_DIR.zip
+    - Compress-Archive -Path $BIN_DIR -DestinationPath "${BIN_DIR}.zip"
     - echo ${GIT_TOKEN} | gh auth login --with-token
     - |- 
       $PREVIOUS_TAG = git describe --abbrev=0 --tags
@@ -319,4 +321,4 @@ create_release:
       $VERSION = ([int]($PREVIOUS_TAG.Split("-")[1]) + 1).toString("0000")
       $LATEST_TAG = "REL-" + $VERSION
       gh release create --latest $LATEST_TAG
-      gh release upload $LATEST_TAG $BIN_DIR.zip --clobber
+      gh release upload $LATEST_TAG "${BIN_DIR}.zip" --clobber
