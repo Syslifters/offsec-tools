@@ -64,8 +64,10 @@ In the GitLab Runner installation directory, define the following settings in th
 * **shell**: powershell
 
 ### 3.2 Install required software
-- Visual Studio 2019 or up
+- Visual Studio 2022
 - Visual Studio 2013 (required by some tools)
+- .NET 6.0 SDK x64 ([[https://www.nuget.org/downloads](https://dotnet.microsoft.com/en-us/download)](https://dotnet.microsoft.com/en-us/download))
+- .NET 4.6.2 ([https://dotnet.microsoft.com/en-us/download/visual-studio-sdks?cid=msbuild-developerpacks](https://dotnet.microsoft.com/en-us/download/visual-studio-sdks?cid=msbuild-developerpacks)) 
 - nuget ([https://www.nuget.org/downloads](https://www.nuget.org/downloads))
 - python ([https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/))
 - PyInstaller ([https://pyinstaller.org/en/stable/installation.html](https://pyinstaller.org/en/stable/installation.html))
