@@ -66,7 +66,7 @@ In the GitLab Runner installation directory, define the following settings in th
 ### 3.2 Install required software
 - Visual Studio 2022
 - Visual Studio 2013 (required by some tools)
-- .NET 6.0 SDK ([https://www.nuget.org/downloads](https://dotnet.microsoft.com/en-us/download)](https://dotnet.microsoft.com/en-us/download))
+- .NET 6.0 SDK ([https://dotnet.microsoft.com/en-us/download](https://dotnet.microsoft.com/en-us/download))
 - .NET 4.6.2 ([https://dotnet.microsoft.com/en-us/download/visual-studio-sdks?cid=msbuild-developerpacks](https://dotnet.microsoft.com/en-us/download/visual-studio-sdks?cid=msbuild-developerpacks)) 
 - nuget ([https://www.nuget.org/downloads](https://www.nuget.org/downloads))
 - python ([https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/))
