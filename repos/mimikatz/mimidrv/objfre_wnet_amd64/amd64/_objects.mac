@@ -1,0 +1,23 @@
+
+
+AMD64_OBJECTS=\
+ $(OBJ_PATH)\$O\mimidrv.obj \
+ $(OBJ_PATH)\$O\kkll_m_process.obj \
+ $(OBJ_PATH)\$O\kkll_m_modules.obj \
+ $(OBJ_PATH)\$O\kkll_m_memory.obj \
+ $(OBJ_PATH)\$O\kkll_m_ssdt.obj \
+ $(OBJ_PATH)\$O\kkll_m_notify.obj \
+ $(OBJ_PATH)\$O\kkll_m_filters.obj \
+
+
+_RES_FILE=$(OBJ_PATH)\$O\mimidrv.res
+
+
+
+# lowercased
+BASEDIR=c:\winddk\7600.16385.1
+OBJECT_ROOT=c:\winddk\7600.16385.1
+MAKEDIR_LOWERCASE=c:\gitlab-runner\builds\-rpavjzb\0\christoph\offsec-compiler\5d0b2220d99ba81689e20b7105a5158f4d78b2d7\repos\mimikatz\mimidrv
+OBJ_PATH=c:\gitlab-runner\builds\-rpavjzb\0\christoph\offsec-compiler\5d0b2220d99ba81689e20b7105a5158f4d78b2d7\repos\mimikatz\mimidrv
+CONCURRENT_MIDL=0
+CONCURRENT_MANIFEST_BUILD=0
