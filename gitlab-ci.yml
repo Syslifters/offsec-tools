@@ -12,7 +12,6 @@ stages:
   - certify
   - certipy
   - mimikatz
-  - safetykatz
   - seatbelt
   - lazagne
   - stracciatella
@@ -22,6 +21,9 @@ stages:
   - crassus
   - release
 
+variables:
+  ROOT_DIR: "repos"
+  BIN_DIR: "bin"
 
 .git:push:
   allow_failure: true
@@ -36,7 +38,9 @@ stages:
     # Clone specified tool repo 
     - |- 
         if($GIT_REPO){
+          cd $ROOT_DIR
           git clone $GIT_REPO
+          cd ..
         }
 
   after_script:
@@ -46,9 +50,11 @@ stages:
     # Delete .git from tool repo
     - |- 
         if($REPO_DIR){
+          cd $ROOT_DIR
           cd $REPO_DIR
           $COMMIT_SHA = git rev-parse HEAD
           Remove-Item -Recurse -Force .git
+          cd ..
           cd ..
         }else{
           $COMMIT_SHA = $CI_COMMIT_SHA
@@ -62,7 +68,9 @@ stages:
     - |- 
       git add -A
       if($REPO_DIR){
+        cd $ROOT_DIR
         git commit -m $MAINTAINER/$REPO_DIR@$COMMIT_SHA
+        cd ..
       }
       else{
         git commit -m $COMMIT_SHA
@@ -74,9 +82,11 @@ cleanup:
   stage: cleanup
   extends: .git:push
   script:
-    - Get-ChildItem -Exclude README.md,HOWTO.md,.gitlab-ci.yml,.git | Remove-Item -Recurse -Force
-    - mkdir dist
-    - New-Item dist\.gitkeep
+    - Get-ChildItem -Exclude README.md,HOWTO.md,gitlab-ci.yml,.git | Remove-Item -Recurse -Force
+    - mkdir $ROOT_DIR
+    - New-Item $ROOT_DIR\.gitkeep
+    - mkdir $BIN_DIR
+    - New-Item $BIN_DIR\.gitkeep
 
 
 build_certify:
@@ -87,9 +97,9 @@ build_certify:
     REPO_DIR: "Certify"
   extends: .git:push
   script:
-    - nuget.exe restore $REPO_DIR\Certify.sln 
-    - MSBuild.exe -t:build $REPO_DIR\Certify.sln
-    - cp $REPO_DIR\Certify\bin\Debug\Certify.exe dist\
+    - nuget.exe restore $ROOT_DIR\$REPO_DIR\Certify.sln 
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Certify.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Certify\bin\Debug\Certify.exe $BIN_DIR\
     
 
 build_mimikatz:
@@ -100,20 +110,11 @@ build_mimikatz:
     REPO_DIR: "mimikatz"
   extends: .git:push
   script:
-    - '&"$env:MSBUILD_VS13\MSBuild.exe" $REPO_DIR\mimikatz.sln  /p:Platform=x64'
-    - cp -Recurse $REPO_DIR\x64\ dist\mimikatz\ 
-
-
-build_safetykatz:
-  stage: safetykatz
-  variables:
-    GIT_REPO: "https://github.com/GhostPack/SafetyKatz.git"
-    MAINTAINER: "GhostPack"
-    REPO_DIR: "SafetyKatz"
-  extends: .git:push
-  script:
-    - MSBuild.exe $REPO_DIR\SafetyKatz.sln
-    - cp $REPO_DIR\SafetyKatz\bin\Debug\SafetyKatz.exe dist\
+    - '&"$env:MSBUILD_VS13\MSBuild.exe" $ROOT_DIR\$REPO_DIR\mimikatz.sln  /p:Platform=x64 /p:DebugType=None /p:DebugSymbols=false'
+    - wget https://github.com/gentilkiwi/mimikatz/releases/latest/download/mimikatz_trunk.zip -outfile mimikatz_trunk.zip
+    - Expand-Archive .\mimikatz_trunk.zip
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\x64\ $BIN_DIR\mimikatz\ 
+    - cp -Force .\mimikatz_trunk\x64\mimidrv.sys $BIN_DIR\mimikatz\mimidrv.sys
 
 
 build_rubeus:
@@ -124,8 +125,8 @@ build_rubeus:
     REPO_DIR: "Rubeus"
   extends: .git:push
   script:
-    - MSBuild.exe $REPO_DIR\Rubeus.sln
-    - cp $REPO_DIR\Rubeus\bin\Debug\Rubeus.exe dist\
+    - MSBuild.exe $ROOT_DIR\$REPO_DIR\Rubeus.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Rubeus\bin\Debug\Rubeus.exe $BIN_DIR\
 
 
 build_sharphound:
@@ -136,9 +137,9 @@ build_sharphound:
     REPO_DIR: "SharpHound"
   extends: .git:push
   script:
-    - dotnet restore $REPO_DIR
-    - dotnet build $REPO_DIR
-    - cp $REPO_DIR\bin\Debug\net462\SharpHound.exe dist\
+    - dotnet restore $ROOT_DIR\$REPO_DIR
+    - dotnet build $ROOT_DIR\$REPO_DIR /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\bin\Debug\net462\SharpHound.exe $BIN_DIR\
 
 
 build_pingcastle:
@@ -149,8 +150,8 @@ build_pingcastle:
     REPO_DIR: "pingcastle"
   extends: .git:push
   script:
-    - MSBuild.exe -t:build $REPO_DIR\PingCastle.sln
-    - cp $REPO_DIR\bin\Debug\PingCastle.exe dist\
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\PingCastle.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\bin\Debug\PingCastle.exe $BIN_DIR\
 
 
 build_powermad:
@@ -161,9 +162,9 @@ build_powermad:
     REPO_DIR: "Powermad"
   extends: .git:push
   script:
-    - mkdir dist\Powermad
-    - cp $REPO_DIR\Powermad.ps1 dist\Powermad\
-    - cp $REPO_DIR\Invoke-DNSUpdate.ps1 dist\Powermad\
+    - mkdir $BIN_DIR\Powermad
+    - cp $ROOT_DIR\$REPO_DIR\Powermad.ps1 $BIN_DIR\Powermad\
+    - cp $ROOT_DIR\$REPO_DIR\Invoke-DNSUpdate.ps1 $BIN_DIR\Powermad\
 
 
 build_adrecon:
@@ -174,7 +175,7 @@ build_adrecon:
     REPO_DIR: "ADRecon"
   extends: .git:push
   script:
-    - cp $REPO_DIR\ADRecon.ps1 dist\
+    - cp $ROOT_DIR\$REPO_DIR\ADRecon.ps1 $BIN_DIR\
 
 
 build_azureadrecon:
@@ -185,7 +186,7 @@ build_azureadrecon:
     REPO_DIR: "AzureADRecon"
   extends: .git:push
   script:
-    - cp $REPO_DIR\AzureADRecon.ps1 dist\
+    - cp $ROOT_DIR\$REPO_DIR\AzureADRecon.ps1 $BIN_DIR\
 
 
 build_seatbelt:
@@ -196,8 +197,8 @@ build_seatbelt:
     REPO_DIR: "Seatbelt"
   extends: .git:push
   script:
-    - MSBuild.exe -t:build $REPO_DIR\Seatbelt.sln
-    - cp $REPO_DIR\Seatbelt\bin\Debug\Seatbelt.exe dist\
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Seatbelt.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Seatbelt\bin\Debug\Seatbelt.exe $BIN_DIR\
 
 
 build_lazagne:
@@ -208,8 +209,8 @@ build_lazagne:
     REPO_DIR: "LaZagne"
   extends: .git:push
   script:
-    - pyinstaller --onefile -p $REPO_DIR\Windows --distpath $REPO_DIR\dist --workpath $REPO_DIR\build --specpath $REPO_DIR\ $REPO_DIR\Windows\laZagne.py
-    - cp $REPO_DIR\dist\laZagne.exe dist\
+    - pyinstaller --onefile -p $ROOT_DIR\$REPO_DIR\Windows --distpath $ROOT_DIR\$REPO_DIR\dist --workpath $ROOT_DIR\$REPO_DIR\build --specpath $ROOT_DIR\$REPO_DIR\ $ROOT_DIR\$REPO_DIR\Windows\laZagne.py
+    - cp $ROOT_DIR\$REPO_DIR\dist\laZagne.exe $BIN_DIR\
 
 
 build_stracciatella:
@@ -220,10 +221,10 @@ build_stracciatella:
     REPO_DIR: "Stracciatella"
   extends: .git:push
   script:
-    - rm $REPO_DIR\Stracciatella.exe
-    - nuget.exe restore $REPO_DIR\Stracciatella.sln 
-    - MSBuild.exe -t:build $REPO_DIR\Stracciatella.sln
-    - cp $REPO_DIR\Stracciatella\bin\Debug\Stracciatella.exe dist\
+    - rm $ROOT_DIR\$REPO_DIR\Stracciatella.exe
+    - nuget.exe restore $ROOT_DIR\$REPO_DIR\Stracciatella.sln 
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Stracciatella.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Stracciatella\bin\Debug\Stracciatella.exe $BIN_DIR\
 
 
 build_inveigh:
@@ -234,9 +235,10 @@ build_inveigh:
     REPO_DIR: "Inveigh"
   extends: .git:push
   script:
-    - mkdir dist\Inveigh
-    - cp $REPO_DIR\Inveigh.ps1 dist\Inveigh\
-    - cp $REPO_DIR\Inveigh-Relay.ps1 dist\Inveigh\
+    - dotnet restore $ROOT_DIR\$REPO_DIR
+    - dotnet build $ROOT_DIR\$REPO_DIR /p:DebugType=None /p:DebugSymbols=false
+    - mkdir $BIN_DIR\Inveigh
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\Inveigh\bin\Debug\net6.0\ $BIN_DIR\Inveigh\
 
 
 build_sharpup:
@@ -247,8 +249,8 @@ build_sharpup:
     REPO_DIR: "SharpUp"
   extends: .git:push
   script:
-    - MSBuild.exe -t:build $REPO_DIR\SharpUp.sln
-    - cp $REPO_DIR\SharpUp\bin\Debug\SharpUp.exe dist\
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\SharpUp.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\SharpUp\bin\Debug\SharpUp.exe $BIN_DIR\
 
 
 build_winpeas:
@@ -259,9 +261,9 @@ build_winpeas:
     REPO_DIR: "PEASS-ng"
   extends: .git:push
   script:
-    - nuget.exe restore $REPO_DIR\winPEAS\winPEASexe\winPEAS.sln 
-    - MSBuild.exe -t:build $REPO_DIR\winPEAS\winPEASexe\winPEAS.sln
-    - cp $REPO_DIR\winPEAS\winPEASexe\winPEAS\bin\Debug\winPEAS.exe dist\
+    - nuget.exe restore $ROOT_DIR\$REPO_DIR\winPEAS\winPEASexe\winPEAS.sln 
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\winPEAS\winPEASexe\winPEAS.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\winPEAS\winPEASexe\winPEAS\bin\Debug\winPEAS.exe $BIN_DIR\
 
 
 build_crassus:
@@ -272,9 +274,9 @@ build_crassus:
     REPO_DIR: "Crassus"
   extends: .git:push
   script:
-    - rm -force -recurse $REPO_DIR\binaries
-    - MSBuild.exe -t:build $REPO_DIR\Crassus.sln
-    - cp $REPO_DIR\Crassus\bin\Debug\Crassus.exe dist\
+    - rm -force -recurse $ROOT_DIR\$REPO_DIR\binaries
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Crassus.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Crassus\bin\Debug\Crassus.exe $BIN_DIR\
 
 
 build_snaffler:
@@ -285,9 +287,9 @@ build_snaffler:
     REPO_DIR: "Snaffler"
   extends: .git:push
   script:
-    - MSBuild.exe -t:restore $REPO_DIR\Snaffler.sln
-    - MSBuild.exe -t:build $REPO_DIR\Snaffler.sln
-    - cp $REPO_DIR\Snaffler\bin\Debug\Snaffler.exe dist\
+    - MSBuild.exe -t:restore $ROOT_DIR\$REPO_DIR\Snaffler.sln
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Snaffler.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Snaffler\bin\Debug\ $BIN_DIR\Snaffler\
 
 
 build_certipy:
@@ -298,8 +300,8 @@ build_certipy:
     REPO_DIR: "Certipy"
   extends: .git:push
   script:
-    - pyinstaller --onefile --distpath $REPO_DIR\dist --workpath $REPO_DIR\build --specpath $REPO_DIR\ $REPO_DIR\certipy\entry.py -n Certipy.exe
-    - cp $REPO_DIR\dist\Certipy.exe dist\
+    - pyinstaller --onefile --distpath $ROOT_DIR\$REPO_DIR\dist --workpath $ROOT_DIR\$REPO_DIR\build --specpath $ROOT_DIR\$REPO_DIR\ $ROOT_DIR\$REPO_DIR\certipy\entry.py -n Certipy.exe
+    - cp $ROOT_DIR\$REPO_DIR\dist\Certipy.exe $BIN_DIR\
 
 
 create_release:
@@ -307,7 +309,7 @@ create_release:
   script:
     - git clone "https://${GIT_USERNAME}:${GIT_TOKEN}@${CI_SERVER_HOST}${CI_PROJECT_PATH}" "${CI_COMMIT_SHA}"
     - cd "${CI_COMMIT_SHA}"
-    - Compress-Archive -Path dist -DestinationPath dist.zip
+    - Compress-Archive -Path $BIN_DIR -DestinationPath $BIN_DIR.zip
     - echo ${GIT_TOKEN} | gh auth login --with-token
     - |- 
       $PREVIOUS_TAG = git describe --abbrev=0 --tags
@@ -317,4 +319,4 @@ create_release:
       $VERSION = ([int]($PREVIOUS_TAG.Split("-")[1]) + 1).toString("0000")
       $LATEST_TAG = "REL-" + $VERSION
       gh release create --latest $LATEST_TAG
-      gh release upload $LATEST_TAG dist.zip --clobber
+      gh release upload $LATEST_TAG $BIN_DIR.zip --clobber
