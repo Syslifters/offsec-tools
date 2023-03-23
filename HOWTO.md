@@ -16,7 +16,7 @@ Scopes needed for personal access token:
 - read_repository
 - write_repository
 
-## 2. Define necessary CI/CD variables
+## 3. Define necessary CI/CD variables
 Define the following CI/CD variables in your GitLab project. They are needed to run the CI script successfully.
 
 * **CI_PROJECT_PATH**: Project path of remote repository to push the tools into (e.g. `/Syslifters/offsec-tools.git`)
@@ -25,10 +25,10 @@ Define the following CI/CD variables in your GitLab project. They are needed to 
 * **GIT_USER_EMAIL**: Username associated with the personal access token.
 * **GIT_USERNAME**: Username of the user used to commit the changes.
 
-## 3. Prepare GitLab Runner
+## 4. Prepare GitLab Runner
 You will need a dedicated Windows system that will compile the tools and function as GitLab Runner. 
 
-### 3.1 Install and Register GitLab Runner
+### 4.1 Install and Register GitLab Runner
 Install the GitLab Runner agent on a Windows system using the PowerShell scripts below or follow the official documentation for step-by-step instructions: [https://docs.gitlab.com/runner/install/windows.html](https://docs.gitlab.com/runner/install/windows.html)
 
 **1. Download Runner Binary**
@@ -57,13 +57,13 @@ Hint: you will find the registration token in the _CI/CD Settings_ in the _Speci
 .\gitlab-runner.exe start
 ```
 
-### 3.2 Edit config.toml
+### 4.2 Edit config.toml
 In the GitLab Runner installation directory, define the following settings in the _config.toml_ configuration file as follows:
 
 * **executor**: shell
 * **shell**: powershell
 
-### 3.2 Install required software
+### 4.3 Install required software
 - Visual Studio 2022
 - Visual Studio 2013 (required by some tools)
 - .NET 6.0 SDK ([https://dotnet.microsoft.com/en-us/download](https://dotnet.microsoft.com/en-us/download))
@@ -72,7 +72,7 @@ In the GitLab Runner installation directory, define the following settings in th
 - python ([https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/))
 - PyInstaller ([https://pyinstaller.org/en/stable/installation.html](https://pyinstaller.org/en/stable/installation.html))
 
-### 3.3 Set/Modify environment variables
+### 4.4 Set/Modify environment variables
 Set/modify the following environment variables. You may need to restart the Gitlab Runner service for the changes to take effect.
 
 * **PATH**
@@ -84,7 +84,7 @@ Set/modify the following environment variables. You may need to restart the Gitl
 * **MSBUILD_VS13**\
 Create a new environment variable _MSBUILD_VS13_ and set its value to the installation path of MSBuild.exe of Visual Studio 2013. E.g. `C:\Program Files (x86)\MSBuild\12.0\Bin`
 
-## 4. Optional: Schedule Pipeline
+## 5. Optional: Schedule Pipeline
 Create a schedule in GitLab to repeatedly trigger the pipeline. This is very practical if you always want to have the latest version of the tools.
 
 ## FINISH 🏁
