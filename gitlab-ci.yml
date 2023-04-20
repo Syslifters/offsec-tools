@@ -12,8 +12,8 @@ stages:
   - certify
   - certipy
   - mimikatz
-  - seatbelt
   - lazagne
+  - seatbelt
   - stracciatella
   - inveigh
   - sharpup
@@ -211,8 +211,11 @@ build_lazagne:
     REPO_DIR: "LaZagne"
   extends: .git:push
   script:
-    - pyinstaller --onefile -p $ROOT_DIR\$REPO_DIR\Windows --distpath $ROOT_DIR\$REPO_DIR\dist --workpath $ROOT_DIR\$REPO_DIR\build --specpath $ROOT_DIR\$REPO_DIR\ $ROOT_DIR\$REPO_DIR\Windows\laZagne.py
-    - cp $ROOT_DIR\$REPO_DIR\dist\laZagne.exe $BIN_DIR\
+    #- pyinstaller --onefile -p $ROOT_DIR\$REPO_DIR\Windows --distpath $ROOT_DIR\$REPO_DIR\dist --workpath $ROOT_DIR\$REPO_DIR\build --specpath $ROOT_DIR\$REPO_DIR\ $ROOT_DIR\$REPO_DIR\Windows\laZagne.py
+    - cd $ROOT_DIR\$REPO_DIR\Windows\
+    - pyinstaller lazagne.spec
+    - cd ..\..\..\
+    - cp $ROOT_DIR\$REPO_DIR\Windows\dist\lazagne.exe $BIN_DIR\
 
 
 build_stracciatella:
@@ -291,7 +294,8 @@ build_snaffler:
   script:
     - MSBuild.exe -t:restore $ROOT_DIR\$REPO_DIR\Snaffler.sln
     - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Snaffler.sln /p:DebugType=None /p:DebugSymbols=false
-    - cp $ROOT_DIR\$REPO_DIR\Snaffler\bin\Debug\ $BIN_DIR\Snaffler\
+    - mkdir $BIN_DIR\Snaffler
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\Snaffler\bin\Debug\ $BIN_DIR\Snaffler\
 
 
 build_certipy:
