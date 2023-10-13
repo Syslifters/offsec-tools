@@ -1,0 +1,88 @@
+
+This file lists modules PyInstaller was not able to find. This does not
+necessarily mean this module is required for running your program. Python and
+Python 3rd-party packages include a lot of conditional or optional modules. For
+example the module 'ntpath' only exists on Windows, whereas the module
+'posixpath' only exists on Posix systems.
+
+Types if import:
+* top-level: imported at the top-level - look at these first
+* conditional: imported within an if-statement
+* delayed: imported within a function
+* optional: imported within a try-except-statement
+
+IMPORTANT: Do NOT post this list to the issue-tracker. Use it as a basis for
+            tracking down the missing module yourself. Thanks!
+
+missing module named 'win32com.gen_py' - imported by win32com (conditional, optional), C:\Program Files\Python310\Lib\site-packages\PyInstaller\hooks\rthooks\pyi_rth_win32comgenpy.py (top-level)
+missing module named 'org.python' - imported by copy (optional), xml.sax (delayed, conditional)
+missing module named pep517 - imported by importlib.metadata (delayed)
+missing module named urllib.unquote - imported by urllib (conditional), asn1crypto._iri (conditional)
+missing module named urllib.quote - imported by urllib (conditional), asn1crypto._iri (conditional)
+missing module named urllib.pathname2url - imported by urllib (conditional), PyInstaller.lib.modulegraph._compat (conditional)
+missing module named pwd - imported by posixpath (delayed, conditional), shutil (delayed, optional), tarfile (optional), pathlib (delayed, optional), subprocess (delayed, conditional, optional), http.server (delayed, optional), webbrowser (delayed), netrc (delayed, conditional), getpass (delayed), distutils.util (delayed, conditional, optional), distutils.archive_util (optional)
+missing module named grp - imported by shutil (delayed, optional), tarfile (optional), pathlib (delayed, optional), subprocess (delayed, conditional, optional), distutils.archive_util (optional)
+missing module named posix - imported by os (conditional, optional), shutil (conditional), importlib._bootstrap_external (conditional)
+missing module named resource - imported by posix (top-level), test.support (delayed, conditional, optional)
+missing module named _frozen_importlib_external - imported by importlib._bootstrap (delayed), importlib (optional), importlib.abc (optional), zipimport (top-level)
+excluded module named _frozen_importlib - imported by importlib (optional), importlib.abc (optional), zipimport (top-level), PyInstaller.loader.pyimod02_archive (delayed)
+missing module named org - imported by pickle (optional)
+missing module named _posixsubprocess - imported by subprocess (optional), multiprocessing.util (delayed)
+missing module named fcntl - imported by subprocess (optional)
+missing module named pyimod03_importers - imported by C:\Program Files\Python310\Lib\site-packages\PyInstaller\hooks\rthooks\pyi_rth_pkgutil.py (top-level), C:\Program Files\Python310\Lib\site-packages\PyInstaller\hooks\rthooks\pyi_rth_pkgres.py (top-level)
+missing module named termios - imported by tty (top-level), getpass (optional)
+missing module named console - imported by pyreadline.console.ansi (conditional)
+missing module named startup - imported by pyreadline.keysyms.common (conditional), pyreadline.keysyms.keysyms (conditional)
+missing module named sets - imported by pyreadline.keysyms.common (optional)
+missing module named System - imported by pyreadline.clipboard.ironpython_clipboard (top-level), pyreadline.keysyms.ironpython_keysyms (top-level), pyreadline.console.ironpython_console (top-level), pyreadline.rlmain (conditional)
+missing module named StringIO - imported by pyreadline.py3k_compat (conditional), Crypto.Util.py3compat (conditional), PyInstaller.lib.modulegraph._compat (conditional), PyInstaller.lib.modulegraph.zipio (conditional)
+missing module named IronPythonConsole - imported by pyreadline.console.ironpython_console (top-level)
+missing module named clr - imported by pyreadline.clipboard.ironpython_clipboard (top-level), pyreadline.console.ironpython_console (top-level)
+missing module named __builtin__ - imported by pkg_resources._vendor.pyparsing (conditional), setuptools._vendor.pyparsing (conditional)
+missing module named ordereddict - imported by pkg_resources._vendor.pyparsing (optional), setuptools._vendor.pyparsing (optional)
+missing module named 'pkg_resources.extern.pyparsing' - imported by pkg_resources._vendor.packaging.requirements (top-level), pkg_resources._vendor.packaging.markers (top-level)
+missing module named 'com.sun' - imported by pkg_resources._vendor.appdirs (delayed, conditional, optional)
+missing module named com - imported by pkg_resources._vendor.appdirs (delayed)
+missing module named _winreg - imported by platform (delayed, optional), lazagne.config.winstructure (optional), lazagne.softwares.browsers.ie (optional), lazagne.softwares.chats.skype (optional), lazagne.softwares.games.galconfusion (optional), lazagne.softwares.games.turba (optional), lazagne.softwares.mails.outlook (optional), lazagne.softwares.multimedia.eyecon (optional), lazagne.softwares.sysadmin.coreftp (optional), lazagne.softwares.sysadmin.openvpn (optional), lazagne.softwares.sysadmin.iiscentralcertp (optional), lazagne.softwares.sysadmin.puttycm (optional), lazagne.softwares.sysadmin.vnc (optional), lazagne.softwares.sysadmin.winscp (optional), lazagne.softwares.windows.autologon (optional), lazagne.softwares.windows.windows (optional), pkg_resources._vendor.appdirs (delayed, conditional)
+missing module named _manylinux - imported by pkg_resources._vendor.packaging.tags (delayed, optional), setuptools._vendor.packaging.tags (delayed, optional)
+missing module named pkg_resources.extern.packaging - imported by pkg_resources.extern (top-level), pkg_resources (top-level)
+missing module named pkg_resources.extern.appdirs - imported by pkg_resources.extern (top-level), pkg_resources (top-level)
+missing module named _scproxy - imported by urllib.request (conditional)
+missing module named 'java.lang' - imported by platform (delayed, optional), xml.sax._exceptions (conditional)
+missing module named vms_lib - imported by platform (delayed, optional)
+missing module named java - imported by platform (delayed)
+missing module named _posixshmem - imported by multiprocessing.resource_tracker (conditional), multiprocessing.shared_memory (conditional)
+missing module named multiprocessing.BufferTooShort - imported by multiprocessing (top-level), multiprocessing.connection (top-level)
+missing module named multiprocessing.AuthenticationError - imported by multiprocessing (top-level), multiprocessing.connection (top-level)
+missing module named multiprocessing.get_context - imported by multiprocessing (top-level), multiprocessing.pool (top-level), multiprocessing.managers (top-level), multiprocessing.sharedctypes (top-level)
+missing module named multiprocessing.TimeoutError - imported by multiprocessing (top-level), multiprocessing.pool (top-level)
+missing module named multiprocessing.set_start_method - imported by multiprocessing (top-level), multiprocessing.spawn (top-level)
+missing module named multiprocessing.get_start_method - imported by multiprocessing (top-level), multiprocessing.spawn (top-level)
+missing module named _dummy_thread - imported by cffi.lock (conditional, optional)
+missing module named dummy_thread - imported by cffi.lock (conditional, optional)
+missing module named thread - imported by cffi.lock (conditional, optional), cffi.cparser (conditional, optional)
+missing module named 'setuptools.extern.pyparsing' - imported by setuptools._vendor.packaging.markers (top-level), setuptools._vendor.packaging.requirements (top-level)
+missing module named 'setuptools.extern.more_itertools' - imported by setuptools.dist (top-level), setuptools.msvc (top-level)
+missing module named 'setuptools.extern.packaging.version' - imported by setuptools.config (top-level), setuptools.msvc (top-level)
+missing module named 'setuptools.extern.packaging.utils' - imported by setuptools.wheel (top-level)
+missing module named 'setuptools.extern.packaging.tags' - imported by setuptools.wheel (top-level)
+missing module named 'setuptools.extern.packaging.specifiers' - imported by setuptools.config (top-level)
+missing module named setuptools.extern.ordered_set - imported by setuptools.extern (top-level), setuptools.dist (top-level)
+missing module named setuptools.extern.packaging - imported by setuptools.extern (top-level), setuptools.dist (top-level), setuptools.command.egg_info (top-level)
+missing module named cStringIO - imported by cPickle (top-level), cffi.ffiplatform (optional), asn1crypto.core (conditional)
+missing module named copy_reg - imported by cPickle (top-level), cStringIO (top-level)
+missing module named cPickle - imported by pycparser.ply.yacc (delayed, optional)
+missing module named cffi._pycparser - imported by cffi (optional), cffi.cparser (optional)
+missing module named ConfigParser - imported by lazagne.softwares.games.kalypsomedia (optional), lazagne.softwares.browsers.mozilla (optional), lazagne.softwares.sysadmin.rclone (optional)
+missing module named 'volatility3.plugins' - imported by pypykatz.commons.readers.volatility3 (top-level)
+missing module named 'volatility3.framework' - imported by pypykatz.commons.readers.volatility3 (top-level)
+missing module named volatility3 - imported by pypykatz.commons.readers.volatility3 (top-level)
+missing module named rekall_lib - imported by pypykatz.commons.readers.rekall (top-level)
+missing module named rekall - imported by pypykatz.commons.readers.rekall (top-level)
+missing module named kernel32 - imported by pypykatz.commons.readers.local.common.defines (delayed, conditional, optional), pypykatz.commons.winapi.local.function_defs.defines (delayed, conditional, optional)
+missing module named urlparse - imported by lazagne.softwares.git.gitforwindows (optional), asn1crypto._iri (conditional)
+missing module named UserDict - imported by asn1crypto._ordereddict (conditional)
+missing module named asyncio.DefaultEventLoopPolicy - imported by asyncio (delayed, conditional), asyncio.events (delayed, conditional)
+missing module named utils - imported by lazagne.config.lib.memorpy.OSXProcess (top-level)
+missing module named pydasm - imported by lazagne.config.lib.memorpy.WinProcess (delayed)
+missing module named _subprocess - imported by lazagne.config.execute_cmd (optional), lazagne.softwares.browsers.ie (optional)
