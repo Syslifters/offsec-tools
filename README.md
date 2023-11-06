@@ -11,7 +11,7 @@ Happy Hacking! :)
 <br>
 <br>
 <p align="center">
-    <a href="https://docs.sysreptor.com"><img width="70" src="https://github.com/cmahrl/OSCP-Reporting/blob/main/logo-invert.svg" alt="Logo SysReptor"></a>
+    <a href="https://docs.sysreptor.com"><img width="70" src="https://docs.sysreptor.com/images/logo-invert.svg" alt="Logo SysReptor"></a>
 </p>
 <h3 align="center">🔎 PS. looking for a proper pentest reporting tool?</h3>
 <h4 align="center">:rocket: Checkout <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h4>
