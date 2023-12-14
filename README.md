@@ -1,4 +1,4 @@
-<img align="left" width="80px" height="80px" src="https://user-images.githubusercontent.com/7896159/220596940-eaccedd8-979d-46eb-a014-e4082d7bf725.png">
+<img align="left" width="80px" height="80px" src="https://avatars.githubusercontent.com/u/106493015?s=400&u=c6bcdab7055f741a137be13c617e9642f38faef6&v=4">
 
 # OffSec Tools
 This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We fetch and compile the latest version of each tool on a regular basis and provide it to you as a release.
