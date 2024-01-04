@@ -1,25 +1,6 @@
 <img align="left" width="80px" height="80px" src="https://avatars.githubusercontent.com/u/106493015?s=400&u=c6bcdab7055f741a137be13c617e9642f38faef6&v=4">
 
-# OffSec Tools
-This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We fetch and compile the latest version of each tool on a regular basis and provide it to you as a release.
-
-You don't have to worry about updating and compiling the tools yourself. Just download the latest release and find all the awesome tools you will need in a single archive.
-
-Happy Hacking! :)  
-<b>Team Syslifters</b> 🦖  
-<a href="https://syslifters.com">https://syslifters.com</a>
-<br>
-<br>
-<p align="center">
-    <a href="https://docs.sysreptor.com"><img width="70" src="https://docs.sysreptor.com/images/logo-invert.svg" alt="Logo SysReptor"></a>
-</p>
-<h3 align="center">🔎 PS. looking for a proper pentest reporting tool?</h3>
-<h4 align="center">:rocket: Checkout <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h4>
-<br/>
-<br/>
-<br/>
-<br/>
-
+# Syslifters OffSec Tools
 <a href="https://github.com/Syslifters/offsec-tools/">
     <img src="https://img.shields.io/github/stars/Syslifters/offsec-tools?color=yellow&style=flat-square">
 </a>
@@ -35,8 +16,21 @@ Happy Hacking! :)
 <a href="https://www.linkedin.com/company/syslifters/">
     <img src="https://img.shields.io/badge/-Linkedin-blue?style=flat-square&logo=linkedin">
 </a>
-<br/>
-<br/>
+
+This repository is intended for pentesters and red teamers using a variety of offensive security tools during their assessments. The repository is a collection of useful tools suitable for assessments in internal environments. We fetch and compile the latest version of each tool on a regular basis and provide it to you as a release.
+
+You don't have to worry about updating and compiling the tools yourself. Just download the latest release and find all the awesome tools you will need in a single archive.
+
+Happy Hacking! :)  
+<b>Team Syslifters</b> 🦖  
+<a href="https://syslifters.com">https://syslifters.com</a>
+<br>
+<br>
+<h3 align="center">🔎 P.S. looking for a proper pentest reporting tool?</h3>
+<h3 align="center">
+    <a href="https://cloud.sysreptor.com/demo"><img src="/Reptor_Schild_Demo.svg" width="15%" alt="Demo"></a>
+</h3>
+<h3 align="center">:rocket: Have a look at <a class="md-button" href="https://docs.sysreptor.com">SysReptor</a></h3>
 
 ## FAQ
 ### Why do you do that?
