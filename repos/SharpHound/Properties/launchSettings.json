@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Sharphound": {
-      "commandName": "Project",
-      "commandLineArgs": "-c All"
-    }
-  }
-}
