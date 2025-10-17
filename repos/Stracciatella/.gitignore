@@ -1,0 +1,9 @@
+/.vs/
+/*/obj/*
+/packages/
+/*/bin/
+/*/Debug/
+/*/Release/
+*.ilk
+*.pdb
+/ClmDisableDll/ClmDisableDll.dll
