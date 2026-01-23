@@ -1,0 +1,246 @@
+:root {
+  /* SpinKit */
+  --sk-size: 50px;
+  --sk-color: white;
+
+  /* BootStrap */
+  --bs-primary: var(--bs-warning);
+  --bs-primary-rgb: var(--bs-warning-rgb);
+  --bs-link-color-rgb: var(--bs-primary-rgb);
+  --bs-btn-bg: var(--bs-warning); /* Button background color */
+  --bs-btn-border-color: var(--bs-warning); /* Button border color */
+  --bs-btn-text-color: black; /* Button text color */
+  --bs-body-font-family: Oswald;
+  /* --sidebar-width: 280px;
+  --sidebar-width-collapsed: 0px; */
+  --bs-focus-ring-color: var(--bs-primary-rgb);
+}
+
+@font-face {
+  font-family: Oswald;
+  src: url(/external/Oswald-VariableFont_wght.ttf);
+}
+
+.form-control:focus,
+.form-check-input:focus,
+.uneditable-input:focus {   
+  border-color: var(--bs-primary-rgb);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.075) inset, 0 0 8px rgba(var(--bs-primary-rgb), 0.8);
+  outline: 0 none;
+}
+
+.form-check-input:checked {
+  /* color: var(--bs-dark); */
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}
+
+input[type="number"] { 
+    text-align: right; 
+}
+
+.btn {
+  --bs-btn-color: black;
+  --bs-btn-bg: var(--bs-primary);
+  --bs-btn-hover-color: black;
+  --bs-btn-hover-bg: var(--bs-primary);
+  --bs-btn-hover-border-color: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+}
+
+/* drop down and up pressed */
+.btn.show {
+  color: var(--bs-btn-active-color);
+  background-color: var(--bs-btn-active-bg);
+  border-color: var(--bs-btn-active-border-color);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--bs-primary);
+  --bs-btn-bg: none;
+  --bs-btn-hover-color: black;
+  --bs-btn-hover-bg: var(--bs-primary);
+  --bs-btn-hover-border-color: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+}
+
+#ui body {
+  overflow: hidden;
+  z-index: -2;
+}
+
+.no-wrap {
+  white-space: nowrap;
+}
+
+.fullscreen {
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+}
+
+.fullheight {
+  height: 100vh;
+}
+
+.toastify, .toast-close {
+  color: var(--bs-dark);
+  background: var(--bs-primary);
+}
+.toast-close {
+  padding-left: 0px;;
+}
+
+/* #options {
+  background-color: var(--bs-light);
+  color: var(--bs-dark)
+} */
+
+#optionspanel {
+  max-height: 100vh;
+  max-width: 20em;
+  min-width: 20em;
+  width: 20em;
+  display: inline-block;
+}
+
+.toolbox {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em; /* Space between buttons
+  /* max-width: calc(64px * 4 + (4 - 1) * 10px); */
+}
+
+.toolbutton {
+  display: block;
+  border: 1px solid;
+  padding-top: 0.3em;
+  height: 4em;
+  width: 4em;
+  text-align: center;
+  flex-shrink: 0; /* dont shrink */
+  cursor: pointer;
+}
+
+#windows {
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.window {
+  position: absolute; /* required for z-index to work */
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  max-width: 80vw;
+  max-height: 98vw;
+  z-index: 30;
+}
+
+.window-content {
+    color: var(--bs-body-color);
+  background: var(--bs-body-bg);
+}
+
+.window-wrapper {
+  overflow: auto;
+}
+
+.window-front {
+  z-index: 31;
+}
+
+/* show only when body data-bs-theme is dark */
+[data-bs-theme="light"] .only-dark {
+  display: none;
+}
+[data-bs-theme="dark"] .only-light {
+  display: none;
+}
+
+#upperstatus {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, 0%);
+}
+
+#progressbars {
+  width: 600px;
+}
+
+.progress-bar {
+  background-color: var(--bs-primary);
+}
+
+#status {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+}
+
+#outerquery {
+  position: absolute;
+  left: 50%;
+  bottom: 0px;
+  transform: translate(-50%, 0%);
+}
+
+#offlineblur {
+  backdrop-filter: blur(5px);
+}
+
+#lower-left {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  white-space: nowrap;
+}
+
+.z-0 {
+  z-index: 0;
+}
+
+.z-10 {
+  z-index: 10;
+}
+
+.z-20 {
+  z-index: 20;
+}
+
+.z-30 {
+  z-index: 30;
+}
+
+.z-40 {
+  z-index: 40;
+}
+
+.z-50 {
+  z-index: 50;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.checkbox-button input[type='checkbox'],
+.checkbox-button input[type='radio'] {
+  display: none;
+}
+
+.checkbox-button input[type='checkbox']:checked+label.btn,
+.checkbox-button input[type='radio']:checked+label.btn {
+  background-color: var(--bs-primary);
+  color: var(--bs-dark);
+}
