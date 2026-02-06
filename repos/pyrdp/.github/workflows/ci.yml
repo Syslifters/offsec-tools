@@ -1,0 +1,162 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - '**'
+  push:
+    branches:
+      - main
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker image
+      run: docker build -t pyrdp .
+    - name: "Smoke test docker image: pyrdp-convert"
+      run: docker run pyrdp pyrdp-convert -h
+    - name: "Smoke test docker image: pyrdp-player"
+      run: docker run pyrdp pyrdp-player -h
+    - name: "Smoke test docker image: pyrdp-mitm"
+      run: docker run pyrdp pyrdp-mitm -h
+    - name: Build slim Docker image
+      run: docker build -f Dockerfile.slim -t pyrdp .
+    - name: "Smoke test docker image: pyrdp-convert"
+      run: docker run pyrdp pyrdp-convert -h
+    - name: "Smoke test docker image: pyrdp-player"
+      run: docker run pyrdp pyrdp-player -h
+    - name: "Smoke test docker image: pyrdp-mitm"
+      run: docker run pyrdp pyrdp-mitm -h
+
+  install-and-test-ubuntu:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-20.04]
+        # Lets try to keep testing an LTS python and latest python
+        python-version: ['3.7', '3.12', '3.13']
+
+    runs-on: ${{ matrix.os }}
+    name: Ubuntu ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: 'x64'
+
+      - name: Python version
+        run: python --version
+      - name: Pip version
+        run: pip --version
+
+      - name: Update apt
+        run: sudo apt update -y
+      - name: Install PyRDP dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+              build-essential python3-dev \
+              libegl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 \
+              libavcodec58 libavdevice58
+      - name: Install PyRDP
+        working-directory: .
+        run: pip install -U -e .[full]
+
+      - name: Install ci dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Extract test files
+        uses: DuckSoft/extract-7z-action@v1.0
+        with:
+          pathSource: test/files/test_files.zip
+          pathTarget: test/files
+
+      - name: Extract test file for regression test 428
+        uses: DuckSoft/extract-7z-action@v1.0
+        with:
+          pathSource: test/files/test_convert_428.zip
+          pathTarget: test/files
+
+      - name: Integration Test with a prerecorded PCAP.
+        working-directory: ./
+        run: coverage run test/test_prerecorded.py
+
+      - name: pyrdp-mitm initialization integration test
+        working-directory: ./
+        run: coverage run --append test/test_mitm_initialization.py dummy_value
+
+      - name: Running pyrdp-player and pyrdp-convert integration tests with verifications
+        working-directory: ./
+        run: ./test/integration.sh
+
+      - name: Run unit tests
+        working-directory: ./
+        run: coverage run --append -m unittest discover -v
+
+      - name: Coverage report
+        working-directory: ./
+        run: coverage report --fail-under=40
+
+
+
+  install-and-test-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        # Lets try to keep testing an LTS python and latest python
+        python-version: ['3.7', '3.12', '3.13']
+
+    name: Windows with Python ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: 'x64'
+
+      - name: Python version
+        run: python --version
+      - name: Pip version
+        run: pip --version
+      - name: Install PyRDP
+        working-directory: .
+        run: pip install -U -e .[full]
+      - name: Install coverage
+        working-directory: .
+        run: pip install coverage
+
+      - name: Extract test files
+        uses: DuckSoft/extract-7z-action@v1.0
+        with:
+          pathSource: test/files/test_files.zip
+          pathTarget: test/files
+
+      - name: Integration Test with a prerecorded PCAP.
+        working-directory: ./
+        run: coverage run test/test_prerecorded.py
+
+      - name: pyrdp-mitm initialization test
+        working-directory: ./
+        run: coverage run --append test/test_mitm_initialization.py dummy_value
+
+      - name: pyrdp-player read a replay in headless mode test
+        working-directory: ./
+        run: coverage run --append -m pyrdp.bin.player --headless test/files/test_session.replay
+
+      - name: pyrdp-convert to MP4
+        working-directory: ./
+        run: coverage run --append -m pyrdp.bin.convert test/files/test_convert.pyrdp -f mp4
+
+      - name: Verify the MP4 file
+        working-directory: ./
+        run: file test_convert.mp4 | grep "MP4 Base Media"
+
+      - name: Run unit tests
+        working-directory: ./
+        run: coverage run --append -m unittest discover -v
+
+      - name: Coverage report
+        working-directory: ./
+        run: coverage report --fail-under=40
