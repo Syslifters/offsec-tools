@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Basic Properties -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <RootNamespace>PingCastle</RootNamespace>
+    <AssemblyName>PingCastle</AssemblyName>
+    <ApplicationIcon>pingcastle.ico</ApplicationIcon>
+    <Platforms>AnyCPU;x64;x86</Platforms>
+    <NoWarn>0436</NoWarn>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+	<PublishSingleFile>true</PublishSingleFile>
+	<SelfContained>true</SelfContained>
+	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+	<UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <!-- Debug Configuration -->
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>embedded</DebugType>
+    <Optimize>false</Optimize>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Release Configuration -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <!-- WCF Support (Critical for ADWS) -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.1" />
+    <PackageReference Include="System.ServiceModel.Primitives" Version="8.0.0" />
+    <PackageReference Include="System.ServiceModel.Http" Version="8.0.0" />
+    <PackageReference Include="System.ServiceModel.Duplex" Version="6.0.0" />
+    <PackageReference Include="System.ServiceModel.Security" Version="6.0.0" />
+    <PackageReference Include="System.ServiceModel.NetTcp" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Windows-Specific APIs -->
+  <ItemGroup>
+    <PackageReference Include="System.DirectoryServices" Version="8.0.0" />
+    <PackageReference Include="System.DirectoryServices.Protocols" Version="8.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.11" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.1" />
+  </ItemGroup>
+
+  <!-- Azure & Graph -->
+  <ItemGroup>
+    <PackageReference Include="Azure.Core" Version="1.44.1" />
+    <PackageReference Include="Microsoft.Graph.Beta" Version="5.99.0-preview" />
+    <PackageReference Include="Microsoft.Graph.Core" Version="3.2.3" />
+  </ItemGroup>
+
+  <!-- Microsoft Identity -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.IdentityModel.Abstractions" Version="8.3.1" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.3.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Logging" Version="8.3.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols" Version="8.3.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.3.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.3.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Validators" Version="8.3.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.1" />
+  </ItemGroup>
+
+  <!-- Microsoft Kiota -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="1.16.4" />
+    <PackageReference Include="Microsoft.Kiota.Authentication.Azure" Version="1.16.4" />
+    <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="1.16.4" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Form" Version="1.16.4" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="1.16.4" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Multipart" Version="1.16.4" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Text" Version="1.16.4" />
+  </ItemGroup>
+
+  <!-- Core Utilities -->
+  <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Std.UriTemplate" Version="2.0.1" />
+  </ItemGroup>
+
+  <!-- BCL Extensions -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Azure SDK -->
+  <ItemGroup>
+    <PackageReference Include="System.ClientModel" Version="1.1.0" />
+  </ItemGroup>
+
+  <!-- Advanced System Packages -->
+  <ItemGroup>
+    <PackageReference Include="System.Memory.Data" Version="6.0.0" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Net.Http.WinHttpHandler" Version="6.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="System.Text.Encodings.Web" Version="8.0.0" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="6.0.1" />
+    <PackageReference Include="System.Resources.Extensions" Version="8.0.0" />
+    <PackageReference Include="System.IO.Packaging" Version="4.7.0" />
+    <PackageReference Include="System.Security.Permissions" Version="8.0.0" />
+    <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+  </ItemGroup>
+
+  <!-- Build Tools -->
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Linked CommonAssemblyInfo -->
+  <ItemGroup>
+    <Compile Include="..\CommonFiles\CommonAssemblyInfo.cs">
+      <Link>Properties\CommonAssemblyInfo.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <!-- App.config and WSDL Files -->
+  <ItemGroup>
+    <None Include="app.config">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="ADWS\wsdl\**\*.wsdl" />
+    <None Include="ADWS\wsdl\**\*.xsd">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="ADWS\wsdl\regeneratewsdl.bat" />
+  </ItemGroup>
+
+  <!-- Embedded Resources -->
+  <ItemGroup>
+	<EmbeddedResource Include="..\PingCastleCommon\Cloud\Rules\RuleDescription.resx">
+	  <SubType>Designer</SubType>
+	  <Link>Cloud\Rules\RuleDescription.resx</Link>
+	</EmbeddedResource>
+    <EmbeddedResource Include="Cloud\UI\AuthenticationDialog.resx">
+      <DependentUpon>AuthenticationDialog.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Content Files -->
+  <ItemGroup>
+    <Content Include="pingcastle.ico" />
+    <Compile Remove="Graph\**" />
+    <None Remove="Graph\**" />
+    <Compile Remove="misc\Subnet.cs" />
+    <Compile Remove="Report\ReportMapBuilder.cs" />
+    <Compile Remove="Report\ReportNetworkMap.cs" />
+    <Compile Remove="Rules\RuleAnalysisDecorator.cs" />
+    <Compile Include="Graph\Export\ExportDataFromActiveDirectoryLive.cs" />
+    <Compile Include="Graph\Export\RelationFactory.cs" />
+    <Compile Include="Graph\Reporting\ReportGenerator.cs" />
+  </ItemGroup>
+
+  <!-- Project References -->
+  <ItemGroup>
+    <ProjectReference Include="..\PingCastleCommon\PingCastleCommon.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Cloud\Tokens\" />
+    <Folder Include="Properties\PublishProfiles\" />
+    <Folder Include="Rules\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="appsettings.console.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Build Events -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="SET PATH=%PATH%;&quot;C:\Program Files (x86)\Windows Kits\8.0\bin\x86&quot;&#xD;&#xA;SET SIGN_SHA256=signtool.exe sign  /d &quot;PingCastle&quot; /td sha256 /fd sha256 /n &quot;Ping Castle SAS&quot;&#xD;&#xA;IF /I &quot;$(COMPUTERNAME)&quot; == &quot;DESKTOP-QCK4J75&quot; goto sign&#xD;&#xA;IF /I &quot;$(COMPUTERNAME)&quot; == &quot;DESKTOP-90K6SJ2&quot; goto sign&#xD;&#xA;&#xD;&#xA;goto end&#xD;&#xA;&#xD;&#xA;:sign&#xD;&#xA;@echo ================&#xD;&#xA;@echo signature&#xD;&#xA;@echo ================&#xD;&#xA;IF /I &quot;$(ConfigurationName)&quot; == &quot;Release&quot; (&#xD;&#xA;echo timestamp&#xD;&#xA;%SIGN_SHA256%  /tr http://timestamp.digicert.com &quot;$(TargetPath)&quot;&#xD;&#xA;)&#xD;&#xA;IF /I &quot;$(ConfigurationName)&quot; == &quot;Debug&quot; (&#xD;&#xA;%SIGN_SHA256% &quot;$(TargetPath)&quot;&#xD;&#xA;)&#xD;&#xA;:end" />
+  </Target>
+
+  <!-- Remove unnecessary runtime files after publish -->
+  <Target Name="RemoveUnnecessaryFiles" AfterTargets="Publish">
+    <ItemGroup>
+      <FilesToRemove Include="$(PublishDir)D3DCompiler_47_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)PenImc_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)PresentationNative_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)vcruntime140_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)wpfgfx_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)PingCastle.dll.config" />
+    </ItemGroup>
+    <Delete Files="@(FilesToRemove)" ContinueOnError="true" />
+  </Target>
+
+  <!-- Auto-publish after every build -->
+  <Target Name="PublishAfterBuild" AfterTargets="Build">
+    <Exec Command="dotnet publish $(ProjectPath) -c $(Configuration) --no-build -o $(OutputPath)publish" />
+  </Target>
+
+</Project>
