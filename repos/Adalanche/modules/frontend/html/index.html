@@ -1,0 +1,676 @@
+{{/* Index page template for Adalanche */}}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <title>Adalanche - Graph Analytics Platform</title>
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1"
+    />
+    <meta charset="utf-8">
+    <meta name="theme-color" content="#ffc107"> <!-- mobile browser -->
+    <meta name="description" content="Adalanche is a graph analytics platform.">
+
+    <link rel="icon" type="image/png" href="icons/adalanche-favicon.png" />
+
+    <!-- <link rel="stylesheet" type="text/css" href="external/halfmoon-ui/halfmoon.css" /> -->
+    <link rel="stylesheet" type="text/css" href="external/vendor/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="external/vendor/bootstrap-icons/bootstrap-icons.css" />
+
+    <link rel="stylesheet" type="text/css" href="external/toastify.min.css">
+    <link rel="stylesheet" type="text/css" href="external/spinkit.css" />
+    <link rel="stylesheet" type="text/css" href="external/graph/cytoscape-context-menus.css" />
+    <link rel="stylesheet" type="text/css" href="external/vendor/tippy.css" />
+
+    <!-- we put everything custom here, so we can override earlier variables -->
+    <link rel="stylesheet" href="adalanche.css" />
+    <style>
+      [x-cloak] { display: none !important; }
+    </style>
+
+    <script src="preferences.js"></script>
+    <script type="module" src="external/vendor/bootstrap.bundle.js"></script>
+
+    <script src="external/popper.min.js"></script>
+
+
+    <!-- Remaining non-vendored graph layout/runtime scripts -->
+    <script src="cytoscape-remote-layout.js"></script>
+
+    <script src="anonymizer.js"></script>
+
+    <script src="extrafuncs.js"></script>
+    <script src="details-layouts.js"></script>
+    <script src="graph.js"></script>
+
+    <script src="custom.js"></script>
+
+    {{range .AdditionalHeaders}} {{.}} {{end}}
+  </head>
+
+  <body id="body" class="z-0">
+    <div id="windows" class="fullscreen" x-data="windowManager()">
+      <template x-for="win in windows" :key="win.id">
+          <div
+              class="window bg-body shadow border"
+              :id="`window_${win.id}`"
+              :style="`
+                  transform: translate(${win.x}px, ${win.y}px);
+                  width: ${win.w}px;
+                  height: ${win.h}px;
+                  z-index: ${win.z};
+              `"
+              @mousedown="bringToFront(win)"
+          >
+              <!-- Title bar -->
+              <div class="bg-primary text-dark p-1 d-flex align-items-center justify-content-between user-select-none">
+
+                  <!-- Title text (drag handle) -->
+                  <div class="cursor-move flex-grow-1"
+                      @mousedown.prevent="startDrag($event, win)">
+                      <span x-html="win.title"></span>
+                  </div>
+
+                  <!-- Close button -->
+                  <button
+                      class="float-end cursor-pointer bi-x-square border-0 bg-transparent text-dark"
+                      @click.stop="closeWindow(win.id)"
+                  >
+                  </button>
+              </div>
+
+              <!-- Content area -->
+              <div class="window-wrapper">
+                <div class="window-content p-1" x-html="win.content"></div>
+              </div>
+
+              <!-- Bottom resize handle -->
+              <div
+                  class="window-resize-bottom cursor-s-resize"
+                  @mousedown.prevent="startResize($event, win, 'bottom')">
+              </div>
+
+              <!-- Right resize handle -->
+              <div
+                  class="window-resize-right cursor-e-resize"
+                  @mousedown.prevent="startResize($event, win, 'right')">
+              </div>
+
+              <!-- Corner resize handle -->
+              <div class="window-resize-corner cursor-se-resize"
+                  @mousedown.prevent="startResize($event, win, 'corner')">
+              </div>
+          </div>
+      </template>
+
+    </div>
+
+    <div id="cy" class="fullscreen z-10"></div>
+
+    <div id="offlineblur" class="fullscreen z-110"></div>
+
+    <div id="upperstatus" class="border bg-body p-1 shadow pe-auto z-120">
+      <div id="backendstatus" class="text-center w-100 px-3">
+        Loading UI ...
+      </div>
+      <div id="reconnecting" class="d-none text-center px-3 py-2">
+        <div class="pb-2">Reconnecting ...</div>
+        <div class="sk-center sk-chase" aria-hidden="true">
+          <div class="sk-chase-dot"></div>
+          <div class="sk-chase-dot"></div>
+          <div class="sk-chase-dot"></div>
+          <div class="sk-chase-dot"></div>
+          <div class="sk-chase-dot"></div>
+          <div class="sk-chase-dot"></div>
+        </div>
+      </div>
+      <div id="progressbars"></div>
+    </div>
+
+    <div id="overlay" class="fullscreen z-30 pe-none">
+      <div id="lower-left">
+        <div id="about" class="pb-2">
+          <div>
+            <img class="only-dark" src="icons/adalanche-logo.svg" height="26px" />
+            <img class="only-light" src="icons/adalanche-logo-black.svg" height="26px" />
+            <span id="programinfo">Adalanche</span>
+          </div>
+          <div>
+            <span id="programlink" class="pe-auto"
+              ><img src="icons/bluesky-logo.svg" height="16px" />
+              <a href="https://bsky.app/profile/lkarlslund.bsky.social">@lkarlslund.bsky.social</a> /
+              <img src="icons/mastodon.svg" height="16px" />
+              <a href="https://infosec.exchange/@lkarlslund"
+                >@lkarlslund</a
+              ></span
+            >
+          </div>
+        </div>
+        <div id="commandbuttons" class="pt-2 pe-auto">
+
+        </div>
+      </div>
+
+      <div
+        id="toasts"
+        class="toast-container position-fixed bottom-0 end-0 p-3"
+      ></div>
+      <div id="options" class="float-end" x-data="{ open: $persist(true).as('ui.options.open').using(window.backendPersist) }">
+        <div
+          id="optionstogglevisibility"
+          class="d-inline-block align-top border p-1 pe-auto card"
+          @click="open = !open"
+        >
+          Options <i class="bi-arrow-left-right"></i>
+        </div>
+        <div id="optionspanel" class="card overflow-y-auto pe-auto" x-show="open" x-transition>
+          <div id="optionscontent" class="w-100">
+            <details x-data="{ open: $persist(false).as('ui.section.analysis.open').using(window.backendPersist) }" :open="open">
+              <summary class="bg-primary text-dark p-1 border-bottom" @click.prevent="open = !open">
+                Analysis
+              </summary>
+              <div id="analysis" class="p-1">
+                <form id="analysisoptionsform" x-data="{
+                  nodeLimit: $persist(2000).as('analysis.node.limit').using(window.backendPersist),
+                  maxDepth: $persist(99).as('analysis.max.depth').using(window.backendPersist),
+                  minEdgeProbability: $persist(0).as('analysis.min.probability').using(window.backendPersist),
+                  minAccumulatedProbability: $persist(0).as('analysis.min.accumulated.probability').using(window.backendPersist),
+                  pruneIslands: $persist(false).as('analysis.prune.islands').using(window.backendPersist)
+                }">
+                  <div class="row">
+                    <div class="col">
+                      <label
+                        for="nodelimit"
+                        class="col-form-label"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="In order to prevent browser crashes, you should probably keep this under 2500"
+                        >Node limit</label
+                      >
+                    </div>
+                    <div class="col">
+                      <input
+                        id="nodelimit"
+                        type="number"
+                        name="nodelimit"
+                        min="100"
+                        max="5000"
+                        x-model.number="nodeLimit"
+                        class="form-control text-end"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col">
+                      <label
+                        for="max_depth"
+                        class="col-form-label"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="How many steps away from the targets should be searched"
+                        >Max analysis depth</label
+                      >
+                    </div>
+                    <div class="col">
+                      <input
+                        id="max_depth"
+                        type="number"
+                        name="max_depth"
+                        min="0"
+                        max="99"
+                        x-model.number="maxDepth"
+                        class="form-control text-end"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <!-- <div class="col">
+                      <label
+                        for="max_outgoing_connections"
+                        class="col-form-label"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="If a node has more than this amount of edges, drop some of them to keep output less cluttered (you will lose some insights)"
+                        >Max outgoing edges</label
+                      >
+                    </div>
+                    <div class="col">
+                      <input
+                        id="max_outgoing_connections"
+                        type="number"
+                        name="max_outgoing_connections"
+                        min="0"
+                        max="5000"
+                        value="50"
+                        preference="analysis.max.ootgoing"
+                        class="form-control text-end"
+                      />
+                    </div> -->
+                  </div>
+
+                  <div class="row">
+                    <div class="col">
+                      <label
+                        for="min_edge_probability"
+                        class="col-form-label"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="The minimum probability for an edge to be included, 0 for all edges even just informative ones"
+                        >Min edge probability %</label
+                      >
+                    </div>
+                    <div class="col">
+                      <input
+                        id="min_edge_probability"
+                        type="number"
+                        length="3"
+                        name="min_edge_probability"
+                        min="0"
+                        max="100"
+                        x-model.number="minEdgeProbability"
+                        class="form-control text-end"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col">
+                      <label
+                        for="minaccprobability"
+                        class="col-form-label"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="The minimum accumulated probability for an edge to be included, eg. two steps with 50% and 50% will give an accumulated probability of 25%"
+                        >Min total probability %</label
+                      >
+                    </div>
+                    <div class="col">
+                      <input
+                        id="min_accumulated_probability"
+                        type="number"
+                        size="3"
+                        name="min_accumulated_probability"
+                        min="0"
+                        max="100"
+                        x-model.number="minAccumulatedProbability"
+                        class="form-control text-end"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="form-check">
+                    <input
+                      class="form-check-input"
+                      id="prune_islands"
+                      type="checkbox"
+                      name="prune_islands"
+                      x-model="pruneIslands"
+                    />
+                    <label
+                      class="form-check-label"
+                      for="prune_islands"
+                      data-bs-toggle="tooltip"
+                      data-bs-title="Remove nodes that are not connected to anything"
+                      >Prune Island Nodes</label
+                    >
+                  </div>
+
+                  <!-- <div class="form-check">
+                    <input
+                      class="form-check-input"
+                      id="dont-expand-au-eo"
+                      type="checkbox"
+                      name="dont-expand-au-eo"
+                      autocomplete="off"
+                      preference="analysis.dontexpandaueo"
+                      defaultpref="true"
+                    />
+                    <label
+                      class="form-check-label"
+                      for="dont-expand-au-eo"
+                      data-bs-toggle="tooltip"
+                      data-bs-title="Expanding these groups usually gives an unreasonable amount of data in the graph"
+                      >Don't expand "Authenticated Users" / "Everyone"</label
+                    >
+                  </div> -->
+                </form>
+              </div>
+            </details>
+            <details x-data="{ open: $persist(false).as('ui.section.graph.open').using(window.backendPersist) }" :open="open">
+              <summary class="bg-primary text-dark p-1 border-bottom" @click.prevent="open = !open">
+                Graph Visualization
+              </summary>
+              <div class="p-1">
+                <div x-data="{ layout: $persist('fcose').as('ui.graph.layout').using(window.backendPersist) }">
+                  <label for="graphlayout">Graph layout engine</label>
+                  <select
+                    class="form-control"
+                    id="graphlayout"
+                    x-model="layout"
+                    x-on:change="if (window.cy) getGraphlayout(layout).run()"
+                  >
+                    <option value="fcose">FCOSE</option>
+                    <option value="d3force">D3 Force</option>
+                    <option value="cose">COSE</option>
+                    <option value="remote">Remote COSE</option>
+                    <option value="remotev2">Remote COSE v2</option>
+                    <option value="cosebilkent">COSE Bilkent</option>
+                    <option value="dagre">DAGRE</option>
+                    <!-- <option value="cise">CISE</option> -->
+                    <option value="random">Random (debug)</option>
+                    <option value="fixed">Fixed (debug)</option>
+                  </select>
+
+                  <!-- <label for="gravity">Gravity</label>
+                  <input type="range" class="form-range" for="remote-cose" id="gravity" min="0" max="1" step="0.01">
+
+                  <label for="spring_coeff">Spring Coefficient</label>
+                  <input type="range" class="form-range" for="remote-cose" id="spring_coeff" min="0.1" max="5" step="0.1">
+
+                  <label for="repulsion_coeff">Repulsion Coefficient</label>
+                  <input type="range" class="form-range" for="remote-cose" id="repulsion_coeff" min="0.1" max="5" step="0.1">
+
+                  <label for="ideal_edge_length">Ideal Edge Length</label>
+                  <input type="range" class="form-range" for="remote-cose" id="ideal_edge_length" min="0.5" max="20" step="0.1"> -->
+                </div>
+
+                <div class="mb-1" x-data="{ nodelabels: $persist('normal').as('ui.graph.nodelabels').using(window.backendPersist) }">
+                  <label for="nodelabels">Node labels</label>
+                  <select
+                    class="form-control"
+                    id="nodelabels"
+                    x-model="nodelabels"
+                    x-on:change="if (window.cy) window.cy.style().update()"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="off">Off</option>
+                    <option value="randomize">Randomize</option>
+                    <option value="checksum">Checksum</option>
+                  </select>
+                </div>
+
+                <div class="mb-1" x-data="{ nodesize: $persist('incoming').as('graph.nodesize').using(window.backendPersist) }">
+                  <label for="nodesizes">Node size</label>
+                  <select
+                    class="form-control"
+                    id="nodesizes"
+                    x-model="nodesize"
+                    x-on:change="if (window.cy) applyNodeStyles(window.cy, nodesize)"
+                  >
+                    <option value="equal">All same size</option>
+                    <option value="incoming">Incoming edges</option>
+                    <option value="outgoing">Outgoing edges</option>
+                  </select>
+                </div>
+
+                <div class="mb-1">
+                  <div class="form-check" x-data="{ showEdgeLabels: $persist(false).as('graph.edgelabels').using(window.backendPersist) }">
+                    <input
+                      class="form-check-input"
+                      id="showedgelabels"
+                      type="checkbox"
+                      x-model="showEdgeLabels"
+                    />
+                    <label class="form-check-label" for="showedgelabels"
+                      >Show edge methods on mouse hover</label
+                    >
+                  </div>
+                </div>
+
+
+                <!-- <label for="edgelabels">Edge labels</label>
+            <select class="form-control" id="edgelabels" preference="graph.labels" defaultpref="normal">
+              <option value="normal">Normal</option>
+              <option value="off">Off</option>
+              <option value="randomize">Randomize</option>
+              <option value="checksum">Checksum</option>
+            </select> -->
+              </div>
+            </details>
+            <details x-data="{ open: $persist(false).as('ui.section.settings.open').using(window.backendPersist) }" :open="open">
+              <summary class="bg-primary text-dark p-1 border-bottom" @click.prevent="open = !open">
+                UI Settings
+              </summary>
+              <div class="p-1">
+                <div class="d-flex flex-column gap-2">
+
+                  <div x-data="{ themeMode: $persist('auto').as('theme').using(window.backendPersist) }" x-effect="window.applyPreferredTheme && window.applyPreferredTheme()">
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                      <label class="form-label mb-0">Theme (<span x-text="themeMode"></span>)</label>
+                      <div class="btn-group ms-auto" role="group" aria-label="Theme mode">
+                        <button type="button" class="btn"
+                        :class="themeMode === 'auto' ? 'btn-primary btn-sm py-0 px-2' : 'btn-outline-primary btn-sm py-0 px-2'"
+                        @click="themeMode = 'auto'">Auto</button>
+                        <button type="button" class="btn"
+                        :class="themeMode === 'dark' ? 'btn-primary btn-sm py-0 px-2' : 'btn-outline-primary btn-sm py-0 px-2'"
+                        @click="themeMode = 'dark'">Dark</button>
+                        <button type="button" class="btn"
+                        :class="themeMode === 'light' ? 'btn-primary btn-sm py-0 px-2' : 'btn-outline-primary btn-sm py-0 px-2'"
+                        @click="themeMode = 'light'">Light</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="form-check" x-data="{ checked: $persist(false).as('ui.hide.options.on.analysis').using(window.backendPersist) }">
+                    <input
+                      class="form-check-input"
+                      id="hideoptionsonanalysis"
+                      type="checkbox"
+                      name="hideoptionsonanalysis"
+                      x-model="checked"
+                    />
+                    <label class="form-check-label" for="hideoptionsonanalysis"
+                      >Hide options on analysis</label
+                    >
+                  </div>
+                  <div class="form-check" x-data="{ hideQueryOnAnalysis: $persist(false).as('ui.hide.query.on.analysis').using(window.backendPersist) }">
+                    <input
+                      class="form-check-input"
+                      id="hidequeryonanalysis"
+                      type="checkbox"
+                      name="hidequeryonanalysis"
+                      x-model="hideQueryOnAnalysis"
+                    />
+                    <label class="form-check-label" for="hidequeryonanalysis"
+                      >Hide query panel on analysis</label
+                    >
+                  </div>
+
+                  <div class="form-check" x-data="{ runQueryOnStartup: $persist(true).as('ui.run.query.on.startup').using(window.backendPersist) }">
+                    <input
+                      class="form-check-input"
+                      id="runqueryonstartup"
+                      type="checkbox"
+                      name="runqueryonstartup"
+                      x-model="runQueryOnStartup"
+                    />
+                    <label class="form-check-label" for="runqueryonstartup"
+                      >Run query on startup</label
+                    >
+                  </div>
+                  <div class="form-check" x-data="{ openDetailsInSameWindow: $persist(true).as('ui.open.details.in.same.window').using(window.backendPersist) }">
+                    <input
+                      class="form-check-input"
+                      id="opendetailsinsamewindow"
+                      type="checkbox"
+                      name="opendetailsinsamewindow"
+                      x-model="openDetailsInSameWindow"
+                    />
+                    <label class="form-check-label" for="runqueryonstartup"
+                      >Open details in same window</label
+                    >
+                  </div>
+                </div>
+              </div>
+            </details>
+            <details x-data="{ open: $persist(false).as('ui.section.tools.open').using(window.backendPersist) }" :open="open">
+              <summary class="bg-primary text-dark p-1 border-bottom" @click.prevent="open = !open">
+                Tools
+              </summary>
+              <div id="tools" class="p-1 toolbox" x-show="open" x-transition>
+                <!-- Open new tab with the documentation endpoint -->
+                <div class="toolbutton" id="docs" x-tooltip.raw="Open documentation in new tab" @click="window.open('/docs', '_blank');">
+                  <div class="bi-file-richtext"></div>Docs
+                </div>
+                <div class="toolbutton" id="explore" x-tooltip.raw="Opens a browsable tree for exploring nodes">
+                  <div class="bi-list-ul"></div>Explore
+                </div>
+                <div id="highlightbutton" class="toolbutton" x-tooltip.raw="Opens a search window for highligting nodes in the results">
+                  <div class="bi-search"></div>Highlight
+                </div>
+                <!-- Open new tab with the export-words endpoint -->
+                <div class="toolbutton" id="export-words" x-tooltip.raw="Exports wordlist from nodes to use with hashcat" @click="window.open('/api/export-words?split=true', '_blank');">
+                  <div class="bi-body-text"></div>Words
+                </div>
+                <!-- <div class="toolbutton" id="node-info" x-tooltip.raw="Show information on known node types">
+                  <div class="bi-body-text"></div>Node Info
+                </div>
+                <div class="toolbutton" id="edge-info" x-tooltip.raw="Show information on known edge types">
+                  <div class="bi-body-text"></div>Edge Info
+                </div>
+                <div class="toolbutton" id="data-statistics" x-tooltip.raw="Show statistics on the current dataset">
+                  <div class="bi-body-text"></div>Statistics
+                </div> -->
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="border card p-2 shadow pe-auto z-40"></div>
+
+    <div id="outerquery" class="card border mb-0 mt-0 p-0 pe-auto z-50" x-data="{ open: $persist(true).as('ui.query.open').using(window.backendPersist) }" @ui:set-query-open.window="open = !!$event.detail">
+      <div id="togglequeryvisible" class="bg-primary text-dark p-1 border-bottom text-center" @click="open = !open">AQL Search <i class="bi-arrow-down-up"></i></div>
+      <div id="querybox" class="mb-2 mx-2" x-show="open" x-transition>
+            <form id="aqlqueryform" class="m-0" x-data="{
+      queries: [],
+      lastQueryIndex: $persist(null).as('ui.last.query.index').using(window.backendPersist),
+      dropdownOpen: false,
+      queryText: null,
+      errorText: null,
+      saveDialogOpen: false,
+      saveName: '',
+      saving: false,
+
+      async load() {
+          const res = await fetch('/api/backend/queries');
+          this.queries = await res.json();
+          // auto-select default if none selected
+          if (!this.lastQueryIndex) {
+            const querynum = this.queries.findIndex(q => q.default) || 0;
+            this.select(querynum);
+          } else {
+             this.select(this.lastQueryIndex);
+          }
+      },
+      select(index) {
+          query = this.queries[index];
+          this.queryText = query.query;
+          this.lastQueryIndex = index;
+          this.dropdownOpen = false;
+      },
+      async deleteQuery(queryName) {
+          if (!confirm(`Delete '${queryName}'?`)) return;
+          await fetch(`/api/backend/queries/${queryName}`, { method: 'DELETE' });
+          if (window.toast) window.toast('Query deleted successfully', '', 'success');
+          this.load();
+      },
+      openSaveDialog() {
+        this.saveName = '';
+        this.saveDialogOpen = true;
+      },
+      async save() {
+        const trimmed = this.saveName.trim();
+        if (!trimmed) {
+          if (window.toast) window.toast('Missing name', 'Enter a query name.', 'error');
+          return;
+        }
+        this.saving = true;
+        try {
+          const res = await fetch(`/api/backend/queries/${encodeURIComponent(trimmed)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            body: window.encodeaqlquery ? window.encodeaqlquery() : JSON.stringify({ query: this.queryText || '' }),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || res.statusText);
+          }
+          if (window.toast) window.toast('Query saved successfully', '', 'success');
+          this.saveDialogOpen = false;
+          await this.load();
+        } catch (e) {
+          if (window.toast) window.toast('Error saving query', e.message || String(e), 'error');
+        } finally {
+          this.saving = false;
+        }
+      },
+      analyze() {
+      }
+  }" x-init="load()" @keydown.escape.window="saveDialogOpen = false">
+              <textarea
+                id="aqlquerytext"
+                class="form-control mt-2 mb-1" style="width: 400px;"
+                name="query"
+                rows="4"
+                spellcheck="false"
+                x-model="queryText"
+              ></textarea>
+              <div id="aqlqueryerror" x-text="errorText"></div>
+              <div id="aqlquerybuttons" class="mt-2">
+                <div id="aqlqueriesdropdown" class="dropup float-start">
+                  <button
+                    id="aqlqueriesbutton"
+                    data-bs-toggle="dropdown"
+                    class="btn btn-primary btn-sm dropdown-toggle"
+                    type="button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    AQL Queries
+                  </button>
+                  <ul
+                    id="aqlqueries"
+                    class="dropdown-menu overflow-y-auto"
+                    style="max-height: 75vh"
+                    aria-labelledby="aqlqueriesbutton"
+                  >
+                    <template x-for="(query, index) in queries" :key="index">
+                      <li class="dropdown-item d-flex justify-content-between align-items-center">
+                        <span @click="select(index)" x-text="query.name" class="flex-grow-1 cursor-pointer"></span>
+                        <i x-show="query.user_defined" class="bi-eraser ms-2"
+                          @click.stop="deleteQuery(query.name)"></i>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+                <button id="savequerybutton" type="button" class="btn btn-outline-primary mx-2 btn-sm" @click="openSaveDialog()">Save</button>
+                <button
+                  id="aqlanalyzebutton"
+                  type="button"
+                  class="btn btn-outline-primary btn-sm float-end"
+                  @click="aqlanalyze();"
+                >
+                  Analyze
+                </button>
+              </div>
+
+              <div x-cloak x-show="saveDialogOpen" x-transition.opacity class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" style="z-index: 3000; display: flex; align-items: center; justify-content: center;">
+                <div class="card p-3 shadow" style="min-width: 320px; max-width: 90vw;" @click.stop>
+                  <div class="mb-2 fw-bold">Save Query</div>
+                  <label for="savequeryname" class="form-label">Name</label>
+                  <input id="savequeryname" type="text" class="form-control mb-3" x-model="saveName" @keydown.enter.prevent="save()">
+                  <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="saveDialogOpen = false" :disabled="saving">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" @click="save()" :disabled="saving || !saveName.trim()">
+                      <span x-show="!saving">Save</span>
+                      <span x-show="saving">Saving...</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </form>
+      </div>
+    </div>
+  </body>
+
+  <script type="text/javascript" src="external/toastify.js"></script>
+</html>
