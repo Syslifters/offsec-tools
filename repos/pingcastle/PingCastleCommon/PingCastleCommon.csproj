@@ -1,0 +1,109 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+	<LangVersion>default</LangVersion>
+	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Template\ReportFonts.css.gz" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CommonFiles\CommonAssemblyInfo.cs" Link="Properties\CommonAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Template\fontawesome.all.min.css" />
+    <Content Include="Template\ReportBase.css" />
+    <Content Include="Template\ReportBase.js" />
+    <Content Include="Template\ReportCloudMain.js" />
+    <Content Include="Template\ReportCompromiseGraph.css" />
+    <Content Include="Template\ReportCompromiseGraph.js" />
+    <Content Include="Template\ReportHealthCheckConsolidation.css" />
+    <Content Include="Template\ReportHealthCheckRules.css" />
+    <Content Include="Template\ReportMapBuilder.css" />
+    <Content Include="Template\ReportMapBuilder.js" />
+    <Content Include="Template\ReportNetworkMap.css" />
+    <Content Include="Template\ReportNetworkMap.js" />
+    <Content Include="Template\ReportRiskControls.css" />
+    <Content Include="Template\responsivetemplate.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Template\bootstrap-table-export.min.js.gz" />
+    <EmbeddedResource Include="Template\bootstrap-table.min.css.gz" />
+    <EmbeddedResource Include="Template\bootstrap-table.min.js.gz" />
+    <EmbeddedResource Include="Template\bootstrap.min.css.gz" />
+    <EmbeddedResource Include="Template\bootstrap.min.js.gz" />
+    <EmbeddedResource Include="Template\dashboardtest.html.gz" />
+    <EmbeddedResource Include="Template\fontawesome.all.min.css.gz" />
+    <EmbeddedResource Include="Template\jquery.min.js.gz" />
+    <EmbeddedResource Include="Template\popper.min.js.gz" />
+    <EmbeddedResource Include="Template\ReportBase.css.gz" />
+    <EmbeddedResource Include="Template\ReportBase.js.gz" />
+    <EmbeddedResource Include="Template\ReportCloudMain.js.gz" />
+    <EmbeddedResource Include="Template\ReportCompromiseGraph.css.gz" />
+    <EmbeddedResource Include="Template\ReportCompromiseGraph.js.gz" />
+    <EmbeddedResource Include="Template\ReportFonts.css.gz" />
+    <EmbeddedResource Include="Template\ReportHealthCheckConsolidation.css.gz" />
+    <EmbeddedResource Include="Template\ReportHealthCheckRules.css.gz" />
+    <EmbeddedResource Include="Template\ReportMapBuilder.css.gz" />
+    <EmbeddedResource Include="Template\ReportMapBuilder.js.gz" />
+    <EmbeddedResource Include="Template\ReportNetworkMap.css.gz" />
+    <EmbeddedResource Include="Template\ReportNetworkMap.js.gz" />
+    <EmbeddedResource Include="Template\ReportRiskControls.css.gz" />
+    <EmbeddedResource Include="Template\responsivetemplate.html.gz" />
+    <EmbeddedResource Include="Template\tableExport.min.js.gz" />
+    <EmbeddedResource Include="Template\vis.min.css.gz" />
+    <EmbeddedResource Include="Template\vis.min.js.gz" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="System.DirectoryServices" Version="8.0.0" />
+    <PackageReference Include="System.Net.NameResolution" Version="4.3.0" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.1" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.0" />
+    <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+    <PackageReference Include="Azure.Core" Version="1.44.1" />
+    <PackageReference Include="Microsoft.Graph.Beta" Version="5.99.0-preview" />
+    <PackageReference Include="Microsoft.Graph.Core" Version="3.2.3" />
+    <PackageReference Include="System.IO.Packaging" Version="4.7.0" />
+    <PackageReference Include="System.ServiceModel.Http" Version="4.10.3" />
+    <PackageReference Include="System.ServiceModel.Primitives" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Healthcheck\Rules\RuleDescription.resx">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+  </ItemGroup>
+
+	<!-- Build Events -->
+	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+		<Exec Command="cd $(ProjectDir)template&#xD;&#xA;powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File &quot;ProcessTemplate.ps1&quot;" />
+	</Target>
+
+</Project>
