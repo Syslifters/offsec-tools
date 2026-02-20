@@ -1,0 +1,208 @@
+name: Chack-Agent PR Triage
+
+on:
+  workflow_run:
+    workflows: ["PR-tests"]
+    types: [completed]
+
+jobs:
+  chack_agent_triage:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      CHACK_LOGS_HTTP_URL: ${{ secrets.CHACK_LOGS_HTTP_URL }}
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      pr_number: ${{ steps.gate.outputs.pr_number }}
+      pr_title: ${{ steps.gate.outputs.pr_title }}
+      pr_body: ${{ steps.gate.outputs.pr_body }}
+      base_ref: ${{ steps.gate.outputs.base_ref }}
+      head_ref: ${{ steps.gate.outputs.head_ref }}
+      base_sha: ${{ steps.gate.outputs.base_sha }}
+      head_sha: ${{ steps.gate.outputs.head_sha }}
+      decision: ${{ steps.parse.outputs.decision }}
+      message: ${{ steps.parse.outputs.message }}
+
+    steps:
+      - name: Resolve PR context
+        id: gate
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number="${PR_NUMBER}"
+          if [ -z "$pr_number" ] && [ -n "$HEAD_BRANCH" ]; then
+            pr_number="$(gh pr list --state open --head "$HEAD_BRANCH" --json number --jq '.[0].number')"
+          fi
+          if [ -z "$pr_number" ]; then
+            echo "No pull request found for this workflow_run; skipping."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          author="$(gh pr view "$pr_number" --json author --jq .author.login)"
+          if [ "$author" != "carlospolop" ]; then
+            echo "PR author is $author; skipping."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pr_title="$(gh pr view "$pr_number" --json title --jq .title)"
+          pr_body="$(gh pr view "$pr_number" --json body --jq .body)"
+          base_ref="$(gh pr view "$pr_number" --json baseRefName --jq .baseRefName)"
+          head_ref="$(gh pr view "$pr_number" --json headRefName --jq .headRefName)"
+          base_sha="$(gh pr view "$pr_number" --json baseRefOid --jq .baseRefOid)"
+          head_sha="$(gh pr view "$pr_number" --json headRefOid --jq .headRefOid)"
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "pr_title<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$pr_title" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "pr_body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$pr_body" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR merge ref
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ steps.gate.outputs.pr_number }}/merge
+        if: ${{ steps.gate.outputs.should_run == 'true' }}
+
+      - name: Pre-fetch base and head refs
+        if: ${{ steps.gate.outputs.should_run == 'true' }}
+        run: |
+          git fetch --no-tags origin \
+            ${{ steps.gate.outputs.base_ref }} \
+            +refs/pull/${{ steps.gate.outputs.pr_number }}/head
+
+      - name: Set up Node.js for Codex
+        if: ${{ steps.gate.outputs.should_run == 'true' }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+
+      - name: Install Codex CLI
+        if: ${{ steps.gate.outputs.should_run == 'true' }}
+        run: |
+          npm install -g @openai/codex
+          codex --version
+
+      - name: Run Chack Agent
+        id: run_chack
+        if: ${{ steps.gate.outputs.should_run == 'true' }}
+        uses: carlospolop/chack-agent@master
+        with:
+          provider: codex
+          model_primary: CHEAP_BUT_QUALITY
+          main_action: peass-ng
+          sub_action: Chack-Agent PR Triage
+          system_prompt: |
+            You are Chack Agent, an elite PR reviewer for PEASS-ng.
+            Be conservative: merge only if changes are simple, safe, and valuable accoding to the uers give guidelines.
+            If in doubt, comment with clear questions or concerns.
+            Remember taht you are an autonomouts agent, use the exec tool to run the needed commands to list, read, analyze, modify, test...
+          tools_config_json: "{\"exec_enabled\": true}"
+          session_config_json: "{\"long_term_memory_enabled\": false}"
+          agent_config_json: "{\"self_critique_enabled\": false, \"require_task_steps_manager_init_first\": true}"
+          output_schema_file: .github/chack-agent/pr-merge-schema.json
+          user_prompt: |
+            You are reviewing PR #${{ steps.gate.outputs.pr_number }} for ${{ github.repository }}.
+
+            Decide whether to merge or comment. Merge only if all of the following are true:
+            - Changes are simple and safe (no DoS, no long operations, no backdoors).
+            - Changes follow common PEASS syntax and style without breaking anything and add useful checks or value.
+            - Changes simplify code or add new useful checks without breaking anything.
+
+            If you don't have any doubts, and all the previous conditions are met, decide to merge.
+            If you have serious doubts, choose "comment" and include your doubts or questions.
+            If you decide to merge, include a short rationale.
+
+            Pull request title and body:
+            ----
+            ${{ steps.gate.outputs.pr_title }}
+            ${{ steps.gate.outputs.pr_body }}
+
+            Review ONLY the changes introduced by the PR:
+              git log --oneline ${{ steps.gate.outputs.base_sha }}...${{ steps.gate.outputs.head_sha }}
+
+            Output JSON only, following the provided schema:
+            .github/chack-agent/pr-merge-schema.json
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Parse Chack Agent decision
+        id: parse
+        if: ${{ steps.gate.outputs.should_run == 'true' }}
+        env:
+          CHACK_MESSAGE: ${{ steps.run_chack.outputs.final-message }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          raw = (os.environ.get('CHACK_MESSAGE', '') or '').strip()
+          decision = 'comment'
+          message = 'Chack Agent did not provide details.'
+          try:
+            data = json.loads(raw or '{}')
+            if isinstance(data, dict):
+              decision = data.get('decision', 'comment')
+              message = data.get('message', '').strip() or message
+            else:
+              message = raw or message
+          except Exception:
+            message = raw or message
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as handle:
+            handle.write(f"decision={decision}\n")
+            handle.write("message<<EOF\n")
+            handle.write(message + "\n")
+            handle.write("EOF\n")
+          PY
+
+  merge_or_comment:
+    runs-on: ubuntu-latest
+    needs: chack_agent_triage
+    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.chack_agent_triage.outputs.should_run == 'true' && needs.chack_agent_triage.outputs.decision != '' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge PR when approved
+        if: ${{ needs.chack_agent_triage.outputs.decision == 'merge' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.chack_agent_triage.outputs.pr_number }}
+        run: |
+          gh api \
+            -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/pulls/${PR_NUMBER}/merge \
+            -f merge_method=squash \
+            -f commit_title="Auto-merge PR #${PR_NUMBER} (Chack Agent)"
+
+      - name: Comment with doubts
+        if: ${{ needs.chack_agent_triage.outputs.decision == 'comment' }}
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.chack_agent_triage.outputs.pr_number }}
+          CHACK_MESSAGE: ${{ needs.chack_agent_triage.outputs.message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: process.env.CHACK_MESSAGE,
+            });

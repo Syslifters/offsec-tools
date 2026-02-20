@@ -1,0 +1,255 @@
+name: PR Failure Chack-Agent Dispatch
+
+on:
+  workflow_run:
+    workflows: ["PR-tests"]
+    types: [completed]
+
+jobs:
+  resolve_pr_context:
+    if: >
+      ${{ github.event.workflow_run.conclusion == 'failure' &&
+          !startsWith(github.event.workflow_run.head_commit.message || '', 'Fix CI failures for PR #') }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      issues: read
+    outputs:
+      number: ${{ steps.pr_context.outputs.number }}
+      author: ${{ steps.pr_context.outputs.author }}
+      head_repo: ${{ steps.pr_context.outputs.head_repo }}
+      head_branch: ${{ steps.pr_context.outputs.head_branch }}
+      should_run: ${{ steps.pr_context.outputs.should_run }}
+    steps:
+      - name: Resolve PR context
+        id: pr_context
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$PR_NUMBER" ] && [ -n "$HEAD_BRANCH" ]; then
+            PR_NUMBER="$(gh pr list --state open --head "$HEAD_BRANCH" --json number --jq '.[0].number')"
+          fi
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No pull request found for workflow_run; skipping."
+            {
+              echo "number="
+              echo "author="
+              echo "head_repo="
+              echo "head_branch=${HEAD_BRANCH}"
+              echo "should_run=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          pr_author=$(gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/pulls/${PR_NUMBER} \
+            --jq '.user.login')
+          pr_head_repo=$(gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/pulls/${PR_NUMBER} \
+            --jq '.head.repo.full_name')
+          pr_head_branch=$(gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/pulls/${PR_NUMBER} \
+            --jq '.head.ref')
+          pr_labels=$(gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/issues/${PR_NUMBER} \
+            --jq '.labels[].name')
+          if echo "$pr_labels" | grep -q "^chack-agent-fix-attempted$"; then
+            echo "chack-agent fix already attempted for PR #${PR_NUMBER}; skipping."
+            should_run=false
+          else
+            should_run=true
+          fi
+          {
+            echo "number=${PR_NUMBER}"
+            echo "author=${pr_author}"
+            echo "head_repo=${pr_head_repo}"
+            echo "head_branch=${pr_head_branch}"
+            echo "should_run=${should_run}"
+          } >> "$GITHUB_OUTPUT"
+
+  chack_agent_on_failure:
+    needs: resolve_pr_context
+    if: ${{ needs.resolve_pr_context.outputs.author == 'carlospolop' && needs.resolve_pr_context.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    env:
+      CHACK_LOGS_HTTP_URL: ${{ secrets.CHACK_LOGS_HTTP_URL }}
+    steps:
+      - name: Comment on PR with failure info
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.resolve_pr_context.outputs.number }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            const body = `PR #${prNumber} had a failing workflow "${process.env.WORKFLOW_NAME}".\n\nRun: ${process.env.RUN_URL}\n\nLaunching Chack Agent to attempt a fix.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body,
+            });
+
+      - name: Mark fix attempt
+        env:
+          PR_NUMBER: ${{ needs.resolve_pr_context.outputs.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/issues/${PR_NUMBER}/labels \
+            -f labels[]=chack-agent-fix-attempted
+
+      - name: Checkout PR head
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ needs.resolve_pr_context.outputs.head_repo }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.CHACK_AGENT_FIXER_TOKEN || github.token }}
+
+      - name: Configure git author
+        run: |
+          git config user.name "chack-agent"
+          git config user.email "chack-agent@users.noreply.github.com"
+
+      - name: Fetch failure summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs \
+            --paginate > /tmp/jobs.json
+          python3 - <<'PY'
+          import json
+
+          data = json.load(open('/tmp/jobs.json'))
+          lines = []
+          for job in data.get('jobs', []):
+            if job.get('conclusion') == 'failure':
+              lines.append(f"Job: {job.get('name')} (id {job.get('id')})")
+              lines.append(f"URL: {job.get('html_url')}")
+              for step in job.get('steps', []):
+                if step.get('conclusion') == 'failure':
+                  lines.append(f"  Step: {step.get('name')}")
+              lines.append("")
+
+          summary = "\n".join(lines).strip() or "No failing job details found."
+          with open('chack_failure_summary.txt', 'w') as handle:
+            handle.write(summary)
+          PY
+
+      - name: Create Chack Agent prompt
+        env:
+          PR_NUMBER: ${{ needs.resolve_pr_context.outputs.number }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ needs.resolve_pr_context.outputs.head_branch }}
+        run: |
+          {
+            echo "You are fixing CI failures for PR #${PR_NUMBER} in ${{ github.repository }}."
+            echo "The failing workflow run is: ${RUN_URL}"
+            echo "The PR branch is: ${HEAD_BRANCH}"
+            echo ""
+            echo "Failure summary:"
+            cat chack_failure_summary.txt
+            echo ""
+            echo "Please identify the cause, apply a easy, simple and minimal fix, and update files accordingly."
+            echo "Run any fast checks you can locally (no network)."
+            echo "Leave the repo in a state ready to commit as when you finish, it'll be automatically committed and pushed."
+          } > chack_prompt.txt
+
+      - name: Set up Node.js for Codex
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+
+      - name: Install Codex CLI
+        run: |
+          npm install -g @openai/codex
+          codex --version
+
+      - name: Run Chack Agent
+        id: run_chack
+        uses: carlospolop/chack-agent@master
+        with:
+          provider: codex
+          model_primary: CHEAP_BUT_QUALITY
+          main_action: peass-ng
+          sub_action: PR Failure Chack-Agent Dispatch
+          system_prompt: |
+            You are Chack Agent, an elite CI-fix engineer.
+            Diagnose the failing workflow, propose the minimal safe fix, and implement it.
+            Run only fast, local checks (no network). Leave the repo ready to commit.
+          prompt_file: chack_prompt.txt
+          tools_config_json: "{\"exec_enabled\": true}"
+          session_config_json: "{\"long_term_memory_enabled\": false}"
+          agent_config_json: "{\"self_critique_enabled\": false, \"require_task_steps_manager_init_first\": true}"
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Commit and push if changed
+        env:
+          TARGET_BRANCH: ${{ needs.resolve_pr_context.outputs.head_branch }}
+          PR_NUMBER: ${{ needs.resolve_pr_context.outputs.number }}
+          ORIGINAL_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -f chack_failure_summary.txt chack_prompt.txt
+
+          pushed=false
+
+          if ! git diff --quiet; then
+            git add -A
+            # Avoid workflow-file pushes with token scopes that cannot write workflows.
+            git reset -- .github/workflows || true
+            git checkout -- .github/workflows || true
+            git clean -fdx -- .github/workflows || true
+            git reset -- chack_failure_summary.txt chack_prompt.txt
+            if git diff --cached --name-only | grep -q '^.github/workflows/'; then
+              echo "Workflow-file changes are still staged; skipping push without workflows permission."
+              exit 0
+            fi
+            if ! git diff --cached --quiet; then
+              git commit -m "Fix CI failures for PR #${PR_NUMBER}"
+            fi
+          fi
+
+          after_head="$(git rev-parse HEAD)"
+          if [ "$after_head" = "$ORIGINAL_HEAD_SHA" ]; then
+            echo "No commit produced by Chack Agent for PR #${PR_NUMBER}."
+            exit 0
+          fi
+
+          if ! git push origin HEAD:${TARGET_BRANCH}; then
+            echo "Push failed (likely token workflow permission limits); leaving run successful without push."
+            exit 0
+          fi
+          pushed=true
+
+          if [ "$pushed" = "true" ]; then
+            gh workflow run PR-tests.yml --ref "${TARGET_BRANCH}"
+          fi
+
+      - name: Comment with Chack Agent result
+        if: ${{ steps.run_chack.outputs.final-message != '' }}
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.resolve_pr_context.outputs.number }}
+          CHACK_MESSAGE: ${{ steps.run_chack.outputs.final-message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: process.env.CHACK_MESSAGE,
+            });
