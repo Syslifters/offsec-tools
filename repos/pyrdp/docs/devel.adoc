@@ -1,0 +1,203 @@
+= Development guide
+:toc: preamble
+:toclevels: 2
+:!toc-title:
+
+This is a guide with quick recipes meant for PyRDP developers.
+
+== Install from git source on Linux
+
+We recommend installing PyRDP in a https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/[virtualenv environment] to avoid dependency issues.
+
+First, make sure to install the prerequisite packages (these are listed for Ubuntu 22.04, you might need to adjust for other distros). We provide two types of installs a full one and a
+slim one. Install the dependencies according to your use case.
+
+```
+# Full install (GUI, convert captures to video)
+sudo apt install python3 python3-pip python3-venv \
+        build-essential python3-dev git openssl \
+        libgl1-mesa-glx \
+        libnotify-bin \
+        libxkbcommon-x11-0 libxcb-xinerama0 \
+        libxcb-icccm4 libxcb-image0 libxcb-util1 libxcb-keysyms1 \
+        libxcb-randr0 libxcb-render-util0 \
+        libavformat-dev libavcodec-dev libavdevice-dev \
+        libavutil-dev libswscale-dev libswresample-dev libavfilter-dev
+
+# Slim install (no GUI, no conversion to video possible)
+sudo apt install python3 python3-pip python3-venv \
+        build-essential python3-dev git openssl
+```
+
+Grab PyRDP's source code:
+
+```
+git clone https://github.com/gosecure/pyrdp.git
+```
+
+Then, create your virtual environment in the `venv` directory inside PyRDP's directory:
+
+```
+cd pyrdp
+python3 -m venv venv
+```
+
+*DO NOT* use the root PyRDP directory for the virtual environment folder (`python3 -m venv .`). You will make a mess,
+and using a directory name like `venv` is more standard anyway.
+
+Before installing the dependencies, you need to activate your virtual environment:
+
+```
+source venv/bin/activate
+```
+
+Finally, you can install the project with Pip:
+
+```
+pip3 install -U pip setuptools wheel
+
+# Without GUI and video conversion dependencies
+pip3 install -U -e .
+
+# With GUI and video conversion dependencies
+pip3 install -U -e '.[full]'
+```
+
+This should install the dependencies required to run PyRDP. If you choose to
+install without the GUI or video conversion dependencies, it will not be possible to use
+`pyrdp-player` without headless mode (`--headless`) or `pyrdp-convert` to produce video output.
+
+
+== Install from git source on Windows
+
+The steps are almost the same. There are two additional prerequisites.
+
+1. A working Python environment https://www.python.org/downloads/windows/[python.org installer recommended]
+2. https://visualstudio.microsoft.com/visual-cpp-build-tools/[Microsoft C++ Build Tools]
+3. https://wiki.openssl.org/index.php/Binaries[OpenSSL]. Make sure it is reachable from your `$PATH`.
+
+Then, create your virtual environment in PyRDP's directory:
+
+```
+cd pyrdp
+python -m venv venv
+```
+
+*DO NOT* use the root PyRDP directory for the virtual environment folder (`python3 -m venv .`). You will make a mess,
+and using a directory name like `venv` is more standard anyway.
+
+Before installing the dependencies, you need to activate your virtual environment:
+
+```
+venv\Scripts\activate
+```
+
+Finally, you can install the project with Pip:
+
+```
+python -m pip install -U pip setuptools wheel
+pip install -U -e ".[full]"
+```
+
+This should install all the dependencies required to run PyRDP.
+For example, to open the player:
+
+```
+python venv\Scripts\pyrdp-player
+```
+
+
+== Building the Docker Image
+
+First of all, build the image by executing this command at the root of PyRDP (where Dockerfile is located):
+
+```
+docker build -t pyrdp .
+```
+
+As an alternative we have a slimmer image without the GUI and ffmpeg dependencies:
+
+```
+docker build -f Dockerfile.slim -t pyrdp .
+```
+
+Cross-platform builds can be achieved using `buildx`:
+
+```
+docker buildx create --name mybuilder --use --platform linux/amd64,linux/arm64
+docker buildx inspect --bootstrap
+docker buildx build --platform linux/arm,linux/amd64 -t pyrdp -f Dockerfile.slim .
+```
+
+
+== Making a release
+
+NOTE: This is a work in progress
+
+.Update dependencies
+
+For developement and normal installation we rely on `pyproject.toml` with loose dependencies.
+For docker images we rely on `requirements.txt` and `requirements-slim.txt` with strict dependencies.
+It is important to keep both approaches in sync and to peridiocally update the requirements files (like before releases).
+See https://github.com/GoSecure/pyrdp/pull/219[the PR where we improved our use of the docker cache] for the reasoning behind this approach.
+
+In a clean tree, on main:
+
+* install and load the venv
+* do a `pip freeze > requirements.txt`
+* manually inspect updated dependencies
+* copy over to `requirements-slim.txt` those that make sense (don't add av, PySide2, etc.)
+
+If you are unsure about which to keep and which to discard between `requirements.txt` and `requirements-slim.txt`, just look at a diff of a previous version.
+
+.Test
+
+docker images (latest, slim), on linux, on Windows
+
+.Update the changelog
+* You can generate author list with where `<tag>` is replaced with previous release's tag:
++
+    git log <tag>.. --format="%aN" --reverse | perl -e 'my %dedupe; while (<STDIN>) { print unless $dedupe{$_}++}' | sort
+
+.Prepare release commit
+* Update version in `pyproject.toml`
+* commit msg: Prepare %version% release
+* You can optionally do a release commit (with `--allow-empty` if needed) msg: Release %version%
+
+.Tag the release commit
+* `git tag -a v%version%` like `git tag -a v1.0.0` (docker builds rely on this tag)
+* Annotated Tag msg: Version %version%
+
+.Push your changes (don't forget the tag!)
+
+.Upload binaries to PyPI
+
+Instructions are partially from: https://cibuildwheel.readthedocs.io/en/stable/deliver-to-pypi/#manual-method
+
+    rm -rf dist/
+    # Make a source distribution
+    pipx run build --sdist
+
+* Download packages built (called artifacts) by the https://github.com/GoSecure/pyrdp/actions/workflows/wheels.yml[Build workflow on GitHub] that are from the release commit
+* Extract the zip in the dist/ directory
+
+    # Upload using 'twine'
+    pipx run twine upload dist/*
+
+.Make a release on github (from changelog and copy sections themes from previous releases)
+* linkify issues with vim's: `%s/{uri-issue}\d\+\[#\(\d\+\)\]/#\1/gc`
+* sections, vim's: `%s/^=== \(.*\)$/## \1/gc`
+* asciidoc links to markdown with vim: `%s/link:\([^\[]\+\)\(\[[^\[]\+\]\)/\2(\1)/gc`
+* include build artifacts generated previously (everything in dist/)
+
+.Post-release
+* Update version in `pyproject.toml` (+1 bugfix, append '.dev0') and commit
+* commit msg: Begin development on next release
+
+
+== Logging
+
+By default we log to stdout and in JSON format. Please use the recommended
+logging style to best leverage the JSON output:
+
+https://docs.python.org/3/howto/logging-cookbook.html#formatting-styles
