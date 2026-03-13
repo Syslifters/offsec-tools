@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PingCastleAutoUpdater</RootNamespace>
+    <AssemblyName>PingCastleAutoUpdater</AssemblyName>
+    <ApplicationIcon>pingcastle.ico</ApplicationIcon>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <OutputPath>..\PingCastle\bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\CommonFiles\CommonAssemblyInfo.cs">
+      <Link>Properties\CommonAssemblyInfo.cs</Link>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="pingcastle.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PingCastleCommon\PingCastleCommon.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Remove unnecessary runtime files after publish -->
+  <Target Name="RemoveUnnecessaryFiles" AfterTargets="Publish">
+    <ItemGroup>
+      <FilesToRemove Include="$(PublishDir)D3DCompiler_47_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)PenImc_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)PresentationNative_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)vcruntime140_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)wpfgfx_cor3.dll" />
+      <FilesToRemove Include="$(PublishDir)PingCastleAutoUpdater.dll.config" />
+    </ItemGroup>
+    <Delete Files="@(FilesToRemove)" ContinueOnError="true" />
+  </Target>
+
+  <!-- Auto-publish after every build -->
+  <Target Name="PublishAfterBuild" AfterTargets="Build">
+    <Exec Command="dotnet publish $(ProjectPath) -c $(Configuration) --no-build -o $(OutputPath)publish" />
+  </Target>
+
+</Project>
