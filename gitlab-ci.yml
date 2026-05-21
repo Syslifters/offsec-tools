@@ -1,0 +1,374 @@
+# See documentation here: https://github.com/Syslifters/offsec-tools/blob/main/HOWTO.md
+
+stages:
+  - cleanup
+  - pingcastle
+  - sharphound
+  - rubeus
+  - powermad
+  - adrecon
+  - azureadrecon
+  - snaffler
+  - certify
+  - certipy
+  - mimikatz
+  - lazagne
+  - seatbelt
+  - stracciatella
+  - inveigh
+  - sharpup
+  - winpeas
+  - crassus
+  - sharpwsus
+  - adalanche
+  - whisker
+  - release
+
+variables:
+  ROOT_DIR: "repos"
+  BIN_DIR: "bin"
+
+.git:push:
+  allow_failure: true
+  before_script:
+    # Clone the repository via HTTPS inside a new directory
+    - git clone "https://${GIT_USERNAME}:${GIT_TOKEN}@${CI_SERVER_HOST}${CI_PROJECT_PATH}" "${CI_COMMIT_SHA}"
+    - git config --system core.longpaths true
+
+    # Go to the new directory
+    - cd "${CI_COMMIT_SHA}"
+
+    # Clone specified tool repo 
+    - |- 
+        if($GIT_REPO){
+          cd $ROOT_DIR
+          git clone $GIT_REPO
+          cd ..
+        }
+
+  after_script:
+    # Go to the new directory
+    - cd "${CI_COMMIT_SHA}"
+
+    # Delete .git from tool repo
+    - |- 
+        if($REPO_DIR){
+          cd $ROOT_DIR
+          cd $REPO_DIR
+          $COMMIT_SHA = git rev-parse HEAD
+          Remove-Item -Recurse -Force .git
+          cd ..
+          cd ..
+        }else{
+          $COMMIT_SHA = $CI_COMMIT_SHA
+        }
+  
+    # Set the displayed user with the commits that are about to be made
+    - git config --global user.email "${GIT_USER_EMAIL}"
+    - git config --global user.name "${GIT_USERNAME}"
+
+    # Add all generated files to Git
+    - |- 
+      git add -A
+      if($REPO_DIR){
+        cd $ROOT_DIR
+        git commit -m $MAINTAINER/$REPO_DIR@$COMMIT_SHA
+        cd ..
+      }
+      else{
+        git commit -m $COMMIT_SHA
+      }
+    - git push origin "${CI_DEFAULT_BRANCH}" -o ci.skip
+
+
+cleanup:
+  stage: cleanup
+  extends: .git:push
+  script:
+    - Get-ChildItem -Exclude README.md,HOWTO.md,gitlab-ci.yml,Reptor_Schild_Demo.svg,.git| Remove-Item -Recurse -Force
+    - mkdir $ROOT_DIR
+    - New-Item $ROOT_DIR\.gitkeep
+    - mkdir $BIN_DIR
+    - New-Item $BIN_DIR\.gitkeep
+
+
+build_certify:
+  stage: certify
+  variables:
+    GIT_REPO: "https://github.com/GhostPack/Certify.git"
+    MAINTAINER: "GhostPack"
+    REPO_DIR: "Certify"
+  extends: .git:push
+  script:
+    - nuget.exe restore $ROOT_DIR\$REPO_DIR\Certify.sln 
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Certify.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Certify\bin\Debug\Certify.exe $BIN_DIR\
+    
+
+build_mimikatz:
+  stage: mimikatz
+  variables:
+    GIT_REPO: "https://github.com/gentilkiwi/mimikatz.git"
+    MAINTAINER: "gentilkiwi"
+    REPO_DIR: "mimikatz"
+  extends: .git:push
+  script:
+    - '&"$env:MSBUILD_VS13\MSBuild.exe" $ROOT_DIR\$REPO_DIR\mimikatz.sln  /p:Platform=x64 /p:DebugType=None /p:DebugSymbols=false'
+    - wget https://github.com/gentilkiwi/mimikatz/releases/latest/download/mimikatz_trunk.zip -outfile mimikatz_trunk.zip
+    - Expand-Archive .\mimikatz_trunk.zip
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\x64\ $BIN_DIR\mimikatz\ 
+    - cp -Force .\mimikatz_trunk\x64\mimidrv.sys $BIN_DIR\mimikatz\mimidrv.sys
+    - Remove-Item -Recurse -Force .\mimikatz_trunk.zip
+    - Remove-Item -Recurse -Force .\mimikatz_trunk
+
+
+build_rubeus:
+  stage: rubeus
+  variables:
+    GIT_REPO: "https://github.com/GhostPack/Rubeus.git"
+    MAINTAINER: "GhostPack"
+    REPO_DIR: "Rubeus"
+  extends: .git:push
+  script:
+    - MSBuild.exe $ROOT_DIR\$REPO_DIR\Rubeus.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Rubeus\bin\Debug\Rubeus.exe $BIN_DIR\
+
+
+build_sharphound:
+  stage: sharphound
+  variables:
+    GIT_REPO: "https://github.com/BloodHoundAD/SharpHound.git"
+    MAINTAINER: "BloodHoundAD"
+    REPO_DIR: "SharpHound"
+  extends: .git:push
+  script:
+    - dotnet restore $ROOT_DIR\$REPO_DIR
+    - dotnet build $ROOT_DIR\$REPO_DIR /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\bin\Debug\net462\SharpHound.exe $BIN_DIR\
+
+
+build_pingcastle:
+  stage: pingcastle
+  variables:
+    GIT_REPO: "https://github.com/vletoux/pingcastle.git"
+    MAINTAINER: "vletoux"
+    REPO_DIR: "pingcastle"
+  extends: .git:push
+  script:
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\PingCastle.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\bin\Debug\PingCastle.exe $BIN_DIR\
+
+
+build_powermad:
+  stage: powermad
+  variables:
+    GIT_REPO: "https://github.com/Kevin-Robertson/Powermad.git"
+    MAINTAINER: "Kevin-Robertson"
+    REPO_DIR: "Powermad"
+  extends: .git:push
+  script:
+    - mkdir $BIN_DIR\Powermad
+    - cp $ROOT_DIR\$REPO_DIR\Powermad.ps1 $BIN_DIR\Powermad\
+    - cp $ROOT_DIR\$REPO_DIR\Invoke-DNSUpdate.ps1 $BIN_DIR\Powermad\
+
+
+build_adrecon:
+  stage: adrecon
+  variables:
+    GIT_REPO: "https://github.com/adrecon/ADRecon.git"
+    MAINTAINER: "adrecon"
+    REPO_DIR: "ADRecon"
+  extends: .git:push
+  script:
+    - cp $ROOT_DIR\$REPO_DIR\ADRecon.ps1 $BIN_DIR\
+
+
+build_azureadrecon:
+  stage: azureadrecon
+  variables:
+    GIT_REPO: "https://github.com/adrecon/AzureADRecon.git"
+    MAINTAINER: "adrecon"
+    REPO_DIR: "AzureADRecon"
+  extends: .git:push
+  script:
+    - cp $ROOT_DIR\$REPO_DIR\AzureADRecon.ps1 $BIN_DIR\
+
+
+build_seatbelt:
+  stage: seatbelt
+  variables:
+    GIT_REPO: "https://github.com/GhostPack/Seatbelt.git"
+    MAINTAINER: "GhostPack"
+    REPO_DIR: "Seatbelt"
+  extends: .git:push
+  script:
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Seatbelt.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Seatbelt\bin\Debug\Seatbelt.exe $BIN_DIR\
+
+
+build_snaffler:
+  stage: snaffler
+  variables:
+    GIT_REPO: "https://github.com/SnaffCon/Snaffler.git"
+    MAINTAINER: "SnaffCon"
+    REPO_DIR: "Snaffler"
+  extends: .git:push
+  script:
+    - MSBuild.exe -t:restore $ROOT_DIR\$REPO_DIR\Snaffler.sln
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Snaffler.sln /p:DebugType=None /p:DebugSymbols=false
+    - mkdir $BIN_DIR\Snaffler
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\Snaffler\bin\Debug\ $BIN_DIR\Snaffler\
+
+
+build_lazagne:
+  stage: lazagne
+  variables:
+    GIT_REPO: "https://github.com/AlessandroZ/LaZagne.git"
+    MAINTAINER: "AlessandroZ"
+    REPO_DIR: "LaZagne"
+  extends: .git:push
+  script:
+    - cd $ROOT_DIR\$REPO_DIR\Windows\
+    - pyinstaller lazagne.spec
+    - cd ..\..\..\
+    - cp $ROOT_DIR\$REPO_DIR\Windows\dist\lazagne.exe $BIN_DIR\
+
+
+build_stracciatella:
+  stage: stracciatella
+  variables:
+    GIT_REPO: "https://github.com/mgeeky/Stracciatella.git"
+    MAINTAINER: "mgeeky"
+    REPO_DIR: "Stracciatella"
+  extends: .git:push
+  script:
+    - rm $ROOT_DIR\$REPO_DIR\Stracciatella.exe
+    - nuget.exe restore $ROOT_DIR\$REPO_DIR\Stracciatella.sln 
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Stracciatella.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Stracciatella\bin\Debug\Stracciatella.exe $BIN_DIR\
+
+
+build_inveigh:
+  stage: inveigh
+  variables:
+    GIT_REPO: "https://github.com/Kevin-Robertson/Inveigh.git"
+    MAINTAINER: "Kevin-Robertson"
+    REPO_DIR: "Inveigh"
+  extends: .git:push
+  script:
+    - dotnet restore $ROOT_DIR\$REPO_DIR
+    - dotnet build $ROOT_DIR\$REPO_DIR /p:DebugType=None /p:DebugSymbols=false
+    - mkdir $BIN_DIR\Inveigh
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\Inveigh\bin\Debug\net8.0\ $BIN_DIR\Inveigh\
+
+
+build_sharpup:
+  stage: sharpup
+  variables:
+    GIT_REPO: "https://github.com/GhostPack/SharpUp.git"
+    MAINTAINER: "GhostPack"
+    REPO_DIR: "SharpUp"
+  extends: .git:push
+  script:
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\SharpUp.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\SharpUp\bin\Debug\SharpUp.exe $BIN_DIR\
+
+
+build_winpeas:
+  stage: winpeas
+  variables:
+    GIT_REPO: "https://github.com/carlospolop/PEASS-ng.git"
+    MAINTAINER: "carlospolop"
+    REPO_DIR: "PEASS-ng"
+  extends: .git:push
+  script:
+    - nuget.exe restore $ROOT_DIR\$REPO_DIR\winPEAS\winPEASexe\winPEAS.sln 
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\winPEAS\winPEASexe\winPEAS.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\winPEAS\winPEASexe\winPEAS\bin\Debug\winPEAS.exe $BIN_DIR\
+
+
+build_crassus:
+  stage: crassus
+  variables:
+    GIT_REPO: "https://github.com/vullabs/Crassus.git"
+    MAINTAINER: "vullabs"
+    REPO_DIR: "Crassus"
+  extends: .git:push
+  script:
+    - rm -force -recurse $ROOT_DIR\$REPO_DIR\binaries
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Crassus.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Crassus\bin\Debug\Crassus.exe $BIN_DIR\
+
+
+build_certipy:
+  stage: certipy
+  variables:
+    GIT_REPO: "https://github.com/ly4k/Certipy"
+    MAINTAINER: "ly4k"
+    REPO_DIR: "Certipy"
+  extends: .git:push
+  script:
+    - pip3 install git+https://github.com/ly4k/ldap3
+    - pyinstaller --onefile --distpath $ROOT_DIR\$REPO_DIR\dist --workpath $ROOT_DIR\$REPO_DIR\build --specpath $ROOT_DIR\$REPO_DIR\ $ROOT_DIR\$REPO_DIR\certipy\entry.py -n Certipy.exe --hidden-import unicrypto.backends.pycryptodomex
+    - cp $ROOT_DIR\$REPO_DIR\dist\Certipy.exe $BIN_DIR\
+
+
+build_sharpwsus:
+  stage: sharpwsus
+  variables:
+    GIT_REPO: "https://github.com/nettitude/SharpWSUS"
+    MAINTAINER: "nettitude"
+    REPO_DIR: "SharpWSUS"
+  extends: .git:push
+  script:
+    - dotnet restore $ROOT_DIR\$REPO_DIR
+    - dotnet build $ROOT_DIR\$REPO_DIR /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\SharpWSUS\bin\Debug\SharpWSUS.exe $BIN_DIR\
+
+
+build_adalanche:
+  stage: adalanche
+  variables:
+    GIT_REPO: "https://github.com/lkarlslund/Adalanche"
+    MAINTAINER: "lkarlslund"
+    REPO_DIR: "Adalanche"
+  extends: .git:push
+  script:
+    - cd $ROOT_DIR\$REPO_DIR\
+    - .\build.ps1
+    - cd ..\..\
+    - mkdir $BIN_DIR\Adalanche
+    - cp -Recurse $ROOT_DIR\$REPO_DIR\binaries $BIN_DIR\Adalanche\
+
+
+build_whisker:
+  stage: whisker
+  variables:
+    GIT_REPO: "https://github.com/eladshamir/Whisker"
+    MAINTAINER: "eladshamir"
+    REPO_DIR: "Whisker"
+  extends: .git:push
+  script:
+    - MSBuild.exe -t:build $ROOT_DIR\$REPO_DIR\Whisker.sln /p:DebugType=None /p:DebugSymbols=false
+    - cp $ROOT_DIR\$REPO_DIR\Whisker\bin\Debug\Whisker.exe $BIN_DIR\
+
+
+create_release:
+  stage: release
+  script:
+    - git clone "https://${GIT_USERNAME}:${GIT_TOKEN}@${CI_SERVER_HOST}${CI_PROJECT_PATH}" "${CI_COMMIT_SHA}"
+    - cd "${CI_COMMIT_SHA}"
+    - Compress-Archive -Path $BIN_DIR -DestinationPath "${BIN_DIR}.zip"
+    - echo ${GIT_TOKEN} | gh auth login --with-token
+    - |- 
+      $PREVIOUS_TAG = git describe --abbrev=0 --tags
+      if(!$PREVIOUS_TAG){
+        $PREVIOUS_TAG = "REL-1000"
+      }
+      $VERSION = ([int]($PREVIOUS_TAG.Split("-")[1]) + 1).toString("0000")
+      $LATEST_TAG = "REL-" + $VERSION
+      gh release create --latest $LATEST_TAG
+      gh release upload $LATEST_TAG "${BIN_DIR}.zip" --clobber
+      
+
+      

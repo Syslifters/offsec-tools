@@ -1,0 +1,3 @@
+﻿Impacket example tools ΓÇö one shared Python environment.
+Run any tool by name, e.g. GetNPUsers.cmd -dc-ip 10.0.0.1 ...
+(Same scripts as impacket/examples; .cmd files are thin wrappers around venv\Scripts\python.exe.)
