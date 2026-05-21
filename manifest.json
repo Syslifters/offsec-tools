@@ -1,0 +1,209 @@
+﻿{
+    "snapshot":  "REL-1001",
+    "updated_at":  "2026-05-21T22:09:18Z",
+    "tools":  {
+                  "lkarlslund/Adalanche":  {
+                                               "name":  "Adalanche",
+                                               "maintainer":  "lkarlslund",
+                                               "git_repo":  "https://github.com/lkarlslund/Adalanche",
+                                               "commit":  "7e0f38e38965b5970f25eddc3409a8ed22fe5f7d",
+                                               "snapshot":  "REL-1000"
+                                           },
+                  "adrecon/ADRecon":  {
+                                          "name":  "ADRecon",
+                                          "maintainer":  "adrecon",
+                                          "git_repo":  "https://github.com/adrecon/ADRecon.git",
+                                          "commit":  "d2ba12c71aef40e07cfe6be6fd98e94f2406b85c",
+                                          "snapshot":  "REL-1000"
+                                      },
+                  "adrecon/AzureADRecon":  {
+                                               "name":  "AzureADRecon",
+                                               "maintainer":  "adrecon",
+                                               "git_repo":  "https://github.com/adrecon/AzureADRecon.git",
+                                               "commit":  "0364564e7f194149e1db88b56084dd43a04596d5",
+                                               "snapshot":  "REL-1000"
+                                           },
+                  "CravateRouge/bloodyAD":  {
+                                                "name":  "bloodyAD",
+                                                "maintainer":  "CravateRouge",
+                                                "git_repo":  "https://github.com/CravateRouge/bloodyAD",
+                                                "commit":  "d1f3a5ce52f4115c0321366fe4a4e331daecc766",
+                                                "snapshot":  "REL-1000"
+                                            },
+                  "ly4k/Certipy":  {
+                                       "name":  "Certipy",
+                                       "maintainer":  "ly4k",
+                                       "git_repo":  "https://github.com/ly4k/Certipy",
+                                       "commit":  "890dbf80afb47ba45c4bfda959dced58f9cdae06",
+                                       "snapshot":  "REL-1000"
+                                   },
+                  "p0dalirius/Coercer":  {
+                                             "name":  "Coercer",
+                                             "maintainer":  "p0dalirius",
+                                             "git_repo":  "https://github.com/p0dalirius/Coercer",
+                                             "commit":  "6024441c708e330582ffc8e4eccc80b931807194",
+                                             "snapshot":  "REL-1000"
+                                         },
+                  "vullabs/Crassus":  {
+                                          "name":  "Crassus",
+                                          "maintainer":  "vullabs",
+                                          "git_repo":  "https://github.com/vullabs/Crassus.git",
+                                          "commit":  "a30fea1ee1f6280489725cb2622c8958ccfb196d",
+                                          "snapshot":  "REL-1000"
+                                      },
+                  "fortra/impacket":  {
+                                          "name":  "impacket",
+                                          "maintainer":  "fortra",
+                                          "git_repo":  "https://github.com/fortra/impacket/",
+                                          "commit":  "255861a51cf0a32cbed16202b7bf92ed26bf5460",
+                                          "snapshot":  "REL-1000"
+                                      },
+                  "Kevin-Robertson/Inveigh":  {
+                                                  "name":  "Inveigh",
+                                                  "maintainer":  "Kevin-Robertson",
+                                                  "git_repo":  "https://github.com/Kevin-Robertson/Inveigh.git",
+                                                  "commit":  "7aea2e7213c9e89ad13fb132d048cf589c6a03f7",
+                                                  "snapshot":  "REL-1000"
+                                              },
+                  "ropnop/kerbrute":  {
+                                          "name":  "kerbrute",
+                                          "maintainer":  "ropnop",
+                                          "git_repo":  "https://github.com/ropnop/kerbrute",
+                                          "commit":  "9cfb81e4fab8037acb44c678773ca3f93bc2b39c",
+                                          "snapshot":  "REL-1000"
+                                      },
+                  "AlessandroZ/LaZagne":  {
+                                              "name":  "LaZagne",
+                                              "maintainer":  "AlessandroZ",
+                                              "git_repo":  "https://github.com/AlessandroZ/LaZagne.git",
+                                              "commit":  "858ff6f95f5176ae3c3c50a3ffc86723bf500a99",
+                                              "snapshot":  "REL-1000"
+                                          },
+                  "gentilkiwi/mimikatz":  {
+                                              "name":  "mimikatz",
+                                              "maintainer":  "gentilkiwi",
+                                              "git_repo":  "https://github.com/gentilkiwi/mimikatz.git",
+                                              "commit":  "306bc6b43099c7b698f2898401fddbded6a630c8",
+                                              "snapshot":  "REL-1000"
+                                          },
+                  "Pennyw0rth/NetExec":  {
+                                             "name":  "NetExec",
+                                             "maintainer":  "Pennyw0rth",
+                                             "git_repo":  "https://github.com/Pennyw0rth/NetExec",
+                                             "commit":  "0fbff80d9c34ceac8d4402921f6120c39949e235",
+                                             "snapshot":  "REL-1000"
+                                         },
+                  "netwrix/pingcastle":  {
+                                             "name":  "pingcastle",
+                                             "maintainer":  "netwrix",
+                                             "git_repo":  "https://github.com/netwrix/pingcastle",
+                                             "commit":  "33e676e3f83b31fb5820dd2f64bc3e721e76d8e8",
+                                             "snapshot":  "REL-1000"
+                                         },
+                  "Kevin-Robertson/Powermad":  {
+                                                   "name":  "Powermad",
+                                                   "maintainer":  "Kevin-Robertson",
+                                                   "git_repo":  "https://github.com/Kevin-Robertson/Powermad.git",
+                                                   "commit":  "3ad36e655d0dbe89941515cdb67a3fd518133dcb",
+                                                   "snapshot":  "REL-1000"
+                                               },
+                  "GoSecure/pyrdp":  {
+                                         "name":  "pyrdp",
+                                         "maintainer":  "GoSecure",
+                                         "git_repo":  "https://github.com/mattl124/pyrdp",
+                                         "commit":  "171f376534026f7699b89b7980434651ba68af5f",
+                                         "snapshot":  "REL-1000"
+                                     },
+                  "GhostPack/Rubeus":  {
+                                           "name":  "Rubeus",
+                                           "maintainer":  "GhostPack",
+                                           "git_repo":  "https://github.com/GhostPack/Rubeus.git",
+                                           "commit":  "74215f68ea70bd6a66c008da91bf5fe21d20b154",
+                                           "snapshot":  "REL-1000"
+                                       },
+                  "GhostPack/Seatbelt":  {
+                                             "name":  "Seatbelt",
+                                             "maintainer":  "GhostPack",
+                                             "git_repo":  "https://github.com/GhostPack/Seatbelt.git",
+                                             "commit":  "392171df84472591d4eae7ebd5b1cdc96ba91377",
+                                             "snapshot":  "REL-1000"
+                                         },
+                  "christoph mahrl/shareranger":  {
+                                                      "name":  "shareranger",
+                                                      "maintainer":  "christoph mahrl",
+                                                      "git_repo":  "https://gitlab.internal.syslifters.com/offsec/shareranger",
+                                                      "commit":  "b534d739d2e0eedbd4310b81ab7b36693b676822",
+                                                      "snapshot":  "REL-1001"
+                                                  },
+                  "GhostPack/SharpDPAPI":  {
+                                               "name":  "SharpDPAPI",
+                                               "maintainer":  "GhostPack",
+                                               "git_repo":  "https://github.com/GhostPack/SharpDPAPI",
+                                               "commit":  "4428263fe85bb1fde1640b6208d11dff6db4fb55",
+                                               "snapshot":  "REL-1000"
+                                           },
+                  "BloodHoundAD/SharpHound":  {
+                                                  "name":  "SharpHound",
+                                                  "maintainer":  "BloodHoundAD",
+                                                  "git_repo":  "https://github.com/BloodHoundAD/SharpHound.git",
+                                                  "commit":  "7cbb6276460ede6f8877bee45d7750bfc7d99b31",
+                                                  "snapshot":  "REL-1000"
+                                              },
+                  "0xthirteen/SharpRDP":  {
+                                              "name":  "SharpRDP",
+                                              "maintainer":  "0xthirteen",
+                                              "git_repo":  "https://github.com/0xthirteen/SharpRDP",
+                                              "commit":  "545419d831045b741987eed247536111940e5be5",
+                                              "snapshot":  "REL-1000"
+                                          },
+                  "Syslifters/SharpRelay":  {
+                                                "name":  "SharpRelay",
+                                                "maintainer":  "Syslifters",
+                                                "git_repo":  "https://github.com/Syslifters/SharpRelay/",
+                                                "commit":  "7d268fe4c34dbc81cfb75b37d4924dd334d40f4e",
+                                                "snapshot":  "REL-1000"
+                                            },
+                  "Mayyhem/SharpSCCM":  {
+                                            "name":  "SharpSCCM",
+                                            "maintainer":  "Mayyhem",
+                                            "git_repo":  "https://github.com/Mayyhem/SharpSCCM",
+                                            "commit":  "7ba3756e574bc6bcde8ec195912175875cfc08a5",
+                                            "snapshot":  "REL-1000"
+                                        },
+                  "GhostPack/SharpUp":  {
+                                            "name":  "SharpUp",
+                                            "maintainer":  "GhostPack",
+                                            "git_repo":  "https://github.com/GhostPack/SharpUp.git",
+                                            "commit":  "8a7579174ed447181835cb82bf2ec0279e9110d0",
+                                            "snapshot":  "REL-1000"
+                                        },
+                  "nettitude/SharpWSUS":  {
+                                              "name":  "SharpWSUS",
+                                              "maintainer":  "nettitude",
+                                              "git_repo":  "https://github.com/nettitude/SharpWSUS",
+                                              "commit":  "53b1a71754ef44118b3756dd9ff9b68fadd97fae",
+                                              "snapshot":  "REL-1000"
+                                          },
+                  "SnaffCon/Snaffler":  {
+                                            "name":  "Snaffler",
+                                            "maintainer":  "SnaffCon",
+                                            "git_repo":  "https://github.com/SnaffCon/Snaffler.git",
+                                            "commit":  "50ed78372b2cdf6df5a61cfdf6fd49c0d575331f",
+                                            "snapshot":  "REL-1000"
+                                        },
+                  "mgeeky/Stracciatella":  {
+                                               "name":  "Stracciatella",
+                                               "maintainer":  "mgeeky",
+                                               "git_repo":  "https://github.com/mgeeky/Stracciatella.git",
+                                               "commit":  "acc83e21951049ab4998ecd18f5e4fa01e1527da",
+                                               "snapshot":  "REL-1000"
+                                           },
+                  "eladshamir/Whisker":  {
+                                             "name":  "Whisker",
+                                             "maintainer":  "eladshamir",
+                                             "git_repo":  "https://github.com/eladshamir/Whisker",
+                                             "commit":  "9a236c063e37f2d59c1637bdefcae6b4371bf466",
+                                             "snapshot":  "REL-1000"
+                                         }
+              }
+}
