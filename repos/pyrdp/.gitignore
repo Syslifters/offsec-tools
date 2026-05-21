@@ -1,0 +1,41 @@
+# python
+*.pyc
+*.pyd
+venv*/
+/*.prof
+.coverage
+
+# Zip the pcap instead
+*.pcap
+
+# IDE stuff
+.project
+.pydevproject
+.idea/
+*~
+.vscode
+
+# packaging
+dist/
+build/
+rdpy.egg-info/
+pyrdp_mitm.egg-info/
+rle*.so
+
+# AsciiDoc
+CHANGELOG.html
+docs/*.html
+
+# pyrdp-specific
+pyrdp_output/
+*.cert
+*.pyrdp
+*.log
+*.key
+mitm.json
+
+# twisted
+/twisted/plugins/dropin.cache
+
+# code coverage
+htmlcov/
