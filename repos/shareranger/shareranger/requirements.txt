@@ -1,0 +1,7 @@
+ldap3
+winkerberos
+PyYAML
+pywin32
+dnspython
+cryptography
+colorama
