@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project]
+name = "bloodyAD"
+authors = [
+    { name="CravateRouge", email="baptiste@cravaterouge.com" },
+]
+version = "2.5.4"
+description = "AD Privesc Swiss Army Knife"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+]
+dependencies = [
+        "cryptography==44.0.2",
+        "badldap>=0.7.5",
+        "winacl==0.1.9",
+        "asn1crypto==1.5.1",
+        "kerbad>=0.5.10"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/CravateRouge/bloodyAD"
+"Bug Tracker" = "https://github.com/CravateRouge/bloodyAD/issues"
+
+[project.scripts]
+bloodyAD = "bloodyAD.main:main"
+bloodyad = "bloodyAD.main:main"
