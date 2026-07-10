@@ -1,0 +1,154 @@
+= Debugging recipes
+
+Don't Google, search in the master PDF downloadable from here: https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/5073f4ed-1e93-45e1-b039-6e30c385867c
+
+== Debugging from the docker container
+
+Build the container (or use an existing tag):
+
+    docker build -t pyrdp -f Dockerfile .
+
+Run it interactive to get a shell but specify root user (to be able to run `pip install`):
+
+    docker run -ti -v $PWD:/home/pyrdp/ --user root pyrdp bash
+
+In the container, install pip:
+
+    apt update
+    apt install python3-pip
+
+Now move away from `/home/pyrdp/` to avoid loading order conflicts and activate the `venv`:
+
+    cd /
+    source /opt/venv/bin/activate
+
+Install the debugger:
+
+    pip install ipdb
+
+Run pyrdp, for example:
+
+    ipdb3 /opt/venv/bin/pyrdp-convert.py -f mp4 /home/pyrdp/rdp_replay_20210112_16-14-08_535_Elizabeth685320.pyrdp
+
+Run `c` to continue on loading breakpoint:
+
+```
+> /opt/venv/bin/pyrdp-convert.py(3)<module>()
+      2 # EASY-INSTALL-SCRIPT: 'pyrdp==1.1.1.dev0','pyrdp-convert.py'
+----> 3 __requires__ = 'pyrdp==1.1.1.dev0'
+      4 __import__('pkg_resources').run_script('pyrdp==1.1.1.dev0', 'pyrdp-convert.py')
+
+ipdb> c
+```
+
+== Protocol-level Debugging
+
+I used that recipe when troubleshooting reproducible Device Redirection issues.
+In the proper parser layer, add print statements of the raw bytes both at the
+parser (`doParse()`) and the writer (`write()`) level. Here's an example patch:
+
+    --- a/pyrdp/parser/rdp/virtual_channel/device_redirection.py
+    +++ b/pyrdp/parser/rdp/virtual_channel/device_redirection.py
+    @@ -108,23 +108,31 @@ class DeviceRedirectionParser(Parser):
+            packetID = DeviceRedirectionPacketID(Uint16LE.unpack(stream))
+
+             if component == DeviceRedirectionComponent.RDPDR_CTYP_CORE and packetID in self.parsers.keys():
+    -            return self.parsers[packetID](stream)
+    +            ret = self.parsers[packetID](stream)
+    +            print(f"Component-specific parser returned\nPDU: {ret}\nRaw bytes: {data.hex()}")
+    +            return ret
+    +            #return self.parsers[packetID](stream)
+             else:
+    -            return DeviceRedirectionPDU(component, packetID, payload=stream.read())
+    +            ret = DeviceRedirectionPDU(component, packetID, payload=stream.read())
+    +            print(f"Generic parser returned\nPDU: {ret}\nRaw bytes: {data.hex()}")
+    +            return ret
+    +            #return DeviceRedirectionPDU(component, packetID, payload=stream.read())
+
+             def write(self, pdu: DeviceRedirectionPDU) -> bytes:
+                 stream = BytesIO()
+                 Uint16LE.pack(pdu.component, stream)
+                 Uint16LE.pack(pdu.packetID, stream)
+
+    +        #import ipdb; ipdb.set_trace()
+             if pdu.component == DeviceRedirectionComponent.RDPDR_CTYP_CORE and pdu.packetID in self.writers.keys():
+                 self.writers[pdu.packetID](pdu, stream)
+    +            print(f"Component-specific writer\nPDU: {pdu}\nRaw bytes: {stream.getvalue().hex()}")
+             else:
+                 stream.write(pdu.payload)
+    +            print(f"Generic writer\nPDU: {pdu}\nRaw bytes: {stream.getvalue().hex()}")
+
+             return stream.getvalue()
+
+
+Then run `pyrdp-mitm.py` with `| tee -a raw-logs.txt` and filter for the raw bytes
+lines and compare one line to the next. I'm doing this inside a ipython notebook
+with the following script:
+
+    # Prepare
+    !grep "Raw bytes" io-raw-bytes.log > io-raw-bytes-only.log
+
+    with open("io-raw-bytes-only.log") as _f:
+        first = _f.readline()
+        while first:
+            second = _f.readline()
+            if first != second:
+                print(first)
+                print(second)
+            first = _f.readline()
+
+Lines that don't match should be investigated because it means that we are not
+sending what we are receiving.
+
+
+== Wireshark
+
+Using the "Decode As" feature and TLS master secrets from the `ssl.log` logfile you can analyze the RDP traffic in Wireshark.
+For "Decode As" the inner protocol should be set to TPKT this will be automatic for port 3389.
+
+Olivier faced problems numerous times with wireshark where encapsulation would stay on TPKT instead of RDP or other RDP-related inner protocols.
+Resetting Wireshark's user configuration fixed the issue.
+Moving `~/.wireshark/` was enough.
+
+Extracting a single VirtualChannel (id 1004 for DeviceRedirection) raw bytes:
+
+    -d tls.port==13389,tpkt -T fields -e rdp.virtualChannelData -2 "t124.channelId == 1004"
+
+=== Decrypt a regular (non-intercepted by PyRDP) RDP Session
+
+Weaken the Windows' cryptography by removing all ciphersuite with ephemeral diffie-helman or DSA.
+Perform a packet capture.
+Open it with the Windows' RDP private key properly configured in Wireshark.
+
+The rough steps are:
+
+In `gpedit.msc` change the cipher list (and order) in following policy:
+
+    Computer Configuration\Administrative Templates\Network\SSL Configuration Settings\SSL Cipher Suite Order
+
+Click enable, then you can access the list and remove all entries with ECDHE and/or ECDSA in it.
+
+You need to restart afterwards.
+
+Extract the private key (see NLA instructions in `./cert-extraction.md`)
+
+Then you can decrypt with wireshark by setting the key.
+
+Fully documented instructions:
+* https://unit42.paloaltonetworks.com/wireshark-tutorial-decrypting-rdp-traffic/
+
+References:
+* https://docs.microsoft.com/en-us/windows-server/security/tls/manage-tls#configuring-tls-cipher-suite-order
+
+
+== AsyncIO Debugging
+
+asyncio code is harder to debug.
+When you think the bug is related to asyncio, like strange hangs, you can see some strategies here: https://docs.python.org/3/library/asyncio-dev.html
+
+
+== PyRDP Player QT GUI via Docker
+
+Finding what doesn't work can be made a lot easier by adding `--env QT_DEBUG_PLUGINS=1` to the `docker run` invocation.
+
+It's almost always a missing library.
