@@ -1,0 +1,91 @@
+# PathRules/Discard'
+- id: KeepWebrootDirs
+  type: Directory
+  description: File paths that are probably web server directories.
+  action: Keep
+  relay:
+    - KeepWritableWebrootDirs
+  location: FilePath
+  patterns:
+    - \\inetpub\\wwwroot(?:\\|$)
+    - \\inetpub\\(?:[^\\]+\\)?wwwroot(?:\\|$)
+    - \\wwwroot(?:\\|$)
+    - \\htdocs(?:\\|$)
+    - \\webapps(?:\\|$)
+    - \\public_html(?:\\|$)
+    - \\www(?:\\|$)
+    - \\html(?:\\|$)
+    - \\web(?:\\|$)
+    - \\public(?:\\|$)
+  ntfs:
+    readable: true
+  severity: Info
+
+- id: KeepWritableWebrootDirs
+  type: Directory
+  description: File paths that are probably web server directories and writable by risky identities.
+  action: Keep
+  location: FilePath
+  patterns:
+    - .*
+  ntfs:
+    writable: true
+  severity: High
+
+- id: DiscardLargeFalsePosDirs
+  type: Directory
+  description: File paths that will be skipped entirely.
+  action: Discard
+  location: FilePath
+  patterns:
+    - \\puppet\\share\\doc$
+    - \\lib\\ruby$
+    - \\lib\\site-packages$
+    - \\usr\\share\\doc$
+    - node_modules$
+    - vendor\\bundle$
+    - vendor\\cache$
+    - \\doc\\openssl$
+    - Anaconda3\\Lib\\test$
+    - WindowsPowerShell\\Modules$
+    - Python\d*\\Lib$
+    - Reference Assemblies\\Microsoft\\Framework\\.NETFramework$
+    - dotnet\\sdk$
+    - dotnet\\shared$
+    - Modules\\Microsoft\.PowerShell\.Security$
+    - Windows\\assembly$
+    - Git\\mingw64
+    - Git\\usr
+  severity: Info
+
+- id: DiscardWinSystemDirs
+  type: Directory
+  description: File paths that will be skipped entirely.
+  action: Discard
+  location: FilePath
+  patterns:
+    - \\winsxs$
+    - \\syswow64$
+    - \\system32$
+    - \\systemapps$
+    - \\windows$
+    - \\windows\\servicing$
+    - \\servicing$
+    - \\WindowsApps$
+    - \\Microsoft\.NET\\Framework$
+    - \\windows\\immersivecontrolpanel$
+    - \\windows\\diagnostics$
+    - \\windows\\debug$
+    - \\locale$
+    - \\chocolatey\\helpers$
+    - \\sources\\sxs$
+    - \\localization$
+    - \\AppData\\Local\\Microsoft$
+    - \\AppData\\Roaming\\Microsoft\\Windows$
+    - \\AppData\\Roaming\\Microsoft\\Teams$
+    - \\wsuscontent$
+    - \\Application Data\\Microsoft\\CLR Security Config$
+    - \\AppData # CUSTOM
+    - \\Application Data # CUSTOM
+    - \\servicing\\LCU$
+  severity: Info

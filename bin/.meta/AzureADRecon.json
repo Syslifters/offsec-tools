@@ -1,0 +1,6 @@
+﻿{
+    "name":  "AzureADRecon",
+    "maintainer":  "adrecon",
+    "git_repo":  "https://github.com/adrecon/AzureADRecon.git",
+    "commit":  "bc64996b2ba9ffe7a3e24ab92d7c6d92d2a40706"
+}

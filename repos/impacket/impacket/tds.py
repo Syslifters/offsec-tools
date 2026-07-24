@@ -1,0 +1,2720 @@
+# Impacket - Collection of Python classes for working with network protocols.
+#
+# Copyright Fortra, LLC and its affiliated companies
+#
+# All rights reserved.
+#
+# This software is provided under a slightly modified version
+# of the Apache Software License. See the accompanying LICENSE file
+# for more information.
+#
+# Description:
+#   [MS-TDS] & [MC-SQLR] implementation.
+#
+# Author:
+#   Alberto Solino (@agsolino) original writer
+#   Aurélien Chalot (@Defte_) massive rework:
+#       - Implement in memory handshake via native SSL
+#       - Implement Channel Binding via tls-unique
+#       - Code comments for easier reading
+#
+# ToDo:
+#   [ ] Implement TDS 8 which means
+#       - Reimplementing TDS packet's structures
+#       - Implement a simple TCP/TLS socket
+#       - Implement Channel Binding with tls-exporter (not implemented in ssl yet)
+#   [ ] Add all the tokens left
+#   [ ] parseRow should be rewritten and add support for all the SQL types in a
+#       good way. Right now it just supports a few types.
+#   [ ] printRows is crappy, just an easy way to print the rows. It should be
+#       rewritten to output like a normal SQL client
+
+
+from __future__ import division
+from __future__ import print_function
+
+# Native SSL support for in memory handshake
+import ssl
+
+# Used to compute the CBT TOKEN
+from hashlib import md5
+import struct
+import socket
+import select
+import random
+import binascii
+import errno
+import math
+import datetime
+from decimal import Decimal, getcontext
+from uuid import uuid4
+
+from impacket import ntlm, uuid, LOG
+from impacket.structure import Structure
+from impacket.mssql.version import MSSQL_VERSION
+
+
+# We need to have a fake Logger to be compatible with the way Impact
+# prints information. Outside Impact it's just a print. Inside
+# we will receive the Impact logger instance to print row information
+# The rest it processed through the standard impacket logging mech.
+class DummyPrint:
+    def logMessage(self, message):
+        if message == "\n":
+            print(message)
+        elif message == "\r":
+            print()
+        else:
+            print(message, end=" ")
+
+
+# MC-SQLR Constants and Structures
+SQLR_PORT = 1434
+SQLR_CLNT_BCAST_EX = 0x02
+SQLR_CLNT_UCAST_EX = 0x03
+SQLR_CLNT_UCAST_INST = 0x04
+SQLR_CLNT_UCAST_DAC = 0x0F
+
+
+class SQLR(Structure):
+    commonHdr = (("OpCode", "B"),)
+
+
+class SQLR_UCAST_INST(SQLR):
+    structure = ("Instance", ":")
+
+    def __init__(self, data=None):
+        SQLR.__init__(self, data)
+        if data is not None:
+            self["OpCode"] = SQLR_CLNT_UCAST_INST
+
+
+class SQLR_UCAST_DAC(SQLR):
+    structure = (
+        ("Protocol", "B=1"),
+        ("Instance", ":"),
+    )
+
+    def __init__(self, data=None):
+        SQLR.__init__(self, data)
+        if data is not None:
+            self["OpCode"] = SQLR_CLNT_UCAST_DAC
+
+
+class SQLR_Response(SQLR):
+    structure = (
+        ("Size", "<H"),
+        ("_Data", "_-Data", 'self["Size"]'),
+        ("Data", ":"),
+    )
+
+
+class SQLErrorException(Exception):
+    pass
+
+
+# TDS Constants and Structures
+
+# TYPE constants
+TDS_SQL_BATCH = 1
+TDS_PRE_TDS_LOGIN = 2
+TDS_RPC = 3
+TDS_TABULAR = 4
+TDS_ATTENTION = 6
+TDS_BULK_LOAD_DATA = 7
+TDS_TRANSACTION = 14
+TDS_LOGIN7 = 16
+TDS_SSPI = 17
+TDS_PRE_LOGIN = 18
+
+# Status constants
+TDS_STATUS_NORMAL = 0
+TDS_STATUS_EOM = 1
+TDS_STATUS_RESET_CONNECTION = 8
+TDS_STATUS_RESET_SKIPTRANS = 16
+
+# Encryption
+TDS_ENCRYPT_OFF = 0
+TDS_ENCRYPT_ON = 1
+TDS_ENCRYPT_NOT_SUP = 2
+TDS_ENCRYPT_REQ = 3
+TDS_ENCRYPT_STRICT = 8
+
+# TDS 8.0 SQL_BATCH ALL_HEADERS layout
+TDS_ALL_HEADERS_TRANSACTION_DESCRIPTOR_LENGTH = 4 + 2 + 8 + 4
+TDS_ALL_HEADERS_LENGTH = 4 + TDS_ALL_HEADERS_TRANSACTION_DESCRIPTOR_LENGTH
+TDS_HEADER_TYPE_TRANSACTION_DESCRIPTOR = 2
+TDS_TRAN_DESCRIPTOR_NO_TRANSACTION = 0
+TDS_OUTSTANDING_REQUEST_COUNT = 1
+
+# Versions sent in LOGIN7.
+TDS_LOGIN7_VERSION_70 = 0x00000070
+TDS_LOGIN7_VERSION_71 = 0x00000071
+TDS_LOGIN7_VERSION_71REV1 = 0x01000071
+TDS_LOGIN7_VERSION_72 = 0x02000972
+TDS_LOGIN7_VERSION_73A = 0x03000A73
+TDS_LOGIN7_VERSION_73B = 0x03000B73
+TDS_LOGIN7_VERSION_74 = 0x04000074
+TDS_LOGIN7_VERSION_80 = 0x08000000
+
+# Negotiated protocol versions as reported by LOGINACK.
+TDS_VERSION_71 = 0x71000001
+TDS_VERSION_72 = 0x72090002
+TDS_VERSION_73A = 0x730A0003
+TDS_VERSION_73B = 0x730B0003
+TDS_VERSION_74 = 0x74000004
+TDS_VERSION_80 = 0x08000000
+
+TDS_LEGACY_LOGIN7_VERSIONS = (
+    TDS_LOGIN7_VERSION_70,
+    TDS_LOGIN7_VERSION_71,
+    TDS_LOGIN7_VERSION_71REV1,
+)
+
+
+def login7_uses_72_plus_token_layout(tds_version):
+    return tds_version not in TDS_LEGACY_LOGIN7_VERSIONS
+
+# Option 2 Flags
+TDS_INTEGRATED_SECURITY_ON = 0x80
+TDS_INIT_LANG_FATAL = 0x01
+TDS_ODBC_ON = 0x02
+
+# Token Types
+TDS_ALTMETADATA_TOKEN = 0x88
+TDS_ALTROW_TOKEN = 0xD3
+TDS_COLMETADATA_TOKEN = 0x81
+TDS_COLINFO_TOKEN = 0xA5
+TDS_DONE_TOKEN = 0xFD
+TDS_DONEPROC_TOKEN = 0xFE
+TDS_DONEINPROC_TOKEN = 0xFF
+TDS_ENVCHANGE_TOKEN = 0xE3
+TDS_ERROR_TOKEN = 0xAA
+TDS_FEATUREEXTACK_TOKEN = 0xAE
+TDS_INFO_TOKEN = 0xAB
+TDS_LOGINACK_TOKEN = 0xAD
+TDS_NBCROW_TOKEN = 0xD2
+TDS_OFFSET_TOKEN = 0x78
+TDS_ORDER_TOKEN = 0xA9
+TDS_RETURNSTATUS_TOKEN = 0x79
+TDS_RETURNVALUE_TOKEN = 0xAC
+TDS_ROW_TOKEN = 0xD1
+TDS_SSPI_TOKEN = 0xED
+TDS_TABNAME_TOKEN = 0xA4
+
+# FeatureExt / FeatureExtAck feature IDs
+TDS_FEATURE_EXT_FEDAUTH = 0x02
+TDS_FEATURE_EXT_UTF8_SUPPORT = 0x0A
+TDS_FEATURE_EXT_TERMINATOR = 0xFF
+TDS_FEATURE_EXT_UTF8_SUPPORT_ENABLED = b"\x01"
+
+# ENVCHANGE Types
+TDS_ENVCHANGE_DATABASE = 1
+TDS_ENVCHANGE_LANGUAGE = 2
+TDS_ENVCHANGE_CHARSET = 3
+TDS_ENVCHANGE_PACKETSIZE = 4
+TDS_ENVCHANGE_UNICODE = 5
+TDS_ENVCHANGE_UNICODE_DS = 6
+TDS_ENVCHANGE_COLLATION = 7
+TDS_ENVCHANGE_TRANS_START = 8
+TDS_ENVCHANGE_TRANS_COMMIT = 9
+TDS_ENVCHANGE_ROLLBACK = 10
+TDS_ENVCHANGE_DTC = 11
+
+# Column types
+# FIXED-LEN Data Types
+TDS_NULL_TYPE = 0x1F
+TDS_INT1TYPE = 0x30
+TDS_BITTYPE = 0x32
+TDS_INT2TYPE = 0x34
+TDS_INT4TYPE = 0x38
+TDS_DATETIM4TYPE = 0x3A
+TDS_FLT4TYPE = 0x3B
+TDS_MONEYTYPE = 0x3C
+TDS_DATETIMETYPE = 0x3D
+TDS_FLT8TYPE = 0x3E
+TDS_MONEY4TYPE = 0x7A
+TDS_INT8TYPE = 0x7F
+
+# VARIABLE-Len Data Types
+TDS_GUIDTYPE = 0x24
+TDS_INTNTYPE = 0x26
+TDS_DECIMALTYPE = 0x37
+TDS_NUMERICTYPE = 0x3F
+TDS_BITNTYPE = 0x68
+TDS_DECIMALNTYPE = 0x6A
+TDS_NUMERICNTYPE = 0x6C
+TDS_FLTNTYPE = 0x6D
+TDS_MONEYNTYPE = 0x6E
+TDS_DATETIMNTYPE = 0x6F
+TDS_DATENTYPE = 0x28
+TDS_TIMENTYPE = 0x29
+TDS_DATETIME2NTYPE = 0x2A
+TDS_DATETIMEOFFSETNTYPE = 0x2B
+TDS_CHARTYPE = 0x2F
+TDS_VARCHARTYPE = 0x27
+TDS_BINARYTYPE = 0x2D
+TDS_VARBINARYTYPE = 0x25
+TDS_BIGVARBINTYPE = 0xA5
+TDS_BIGVARCHRTYPE = 0xA7
+TDS_BIGBINARYTYPE = 0xAD
+TDS_BIGCHARTYPE = 0xAF
+TDS_NVARCHARTYPE = 0xE7
+TDS_NCHARTYPE = 0xEF
+TDS_XMLTYPE = 0xF1
+TDS_UDTTYPE = 0xF0
+TDS_TEXTTYPE = 0x23
+TDS_IMAGETYPE = 0x22
+TDS_NTEXTTYPE = 0x63
+TDS_SSVARIANTTYPE = 0x62
+
+
+class TDSPacket(Structure):
+    structure = (
+        ("Type", "<B"),
+        ("Status", "<B=1"),
+        ("Length", ">H=8+len(Data)"),
+        ("SPID", ">H=0"),
+        ("PacketID", "<B=0"),
+        ("Window", "<B=0"),
+        ("Data", ":"),
+    )
+
+
+class TDS_PRELOGIN(Structure):
+    structure = (
+        ("VersionToken", ">B=0"),
+        ("VersionOffset", ">H"),
+        ("VersionLength", '>H=len(self["Version"])'),
+        ("EncryptionToken", ">B=0x1"),
+        ("EncryptionOffset", ">H"),
+        ("EncryptionLength", ">H=1"),
+        ("InstanceToken", ">B=2"),
+        ("InstanceOffset", ">H"),
+        ("InstanceLength", '>H=len(self["Instance"])'),
+        ("ThreadIDToken", ">B=3"),
+        ("ThreadIDOffset", ">H"),
+        ("ThreadIDLength", ">H=4"),
+        ("EndToken", ">B=0xff"),
+        ("_Version", "_-Version", 'self["VersionLength"]'),
+        ("Version", ":"),
+        ("Encryption", "B"),
+        ("_Instance", "_-Instance", 'self["InstanceLength"]-1'),
+        ("Instance", ":"),
+        ("ThreadID", ":"),
+    )
+
+    def getData(self):
+        self["VersionOffset"] = 21
+        self["EncryptionOffset"] = self["VersionOffset"] + len(self["Version"])
+        self["InstanceOffset"] = self["EncryptionOffset"] + 1
+        self["ThreadIDOffset"] = self["InstanceOffset"] + len(self["Instance"])
+        return Structure.getData(self)
+
+
+class TDS_LOGIN(Structure):
+    structure = (
+        ("Length", "<L=0"),
+        ("TDSVersion", ">L=0x71"),
+        ("PacketSize", "<L=32764"),
+        ("ClientProgVer", ">L=7"),
+        ("ClientPID", "<L=0"),
+        ("ConnectionID", "<L=0"),
+        ("OptionFlags1", "<B=0xe0"),
+        ("OptionFlags2", "<B"),
+        ("TypeFlags", "<B=0"),
+        ("OptionFlags3", "<B=0"),
+        ("ClientTimeZone", "<L=0"),
+        ("ClientLCID", "<L=0"),
+        ("HostNameOffset", "<H"),
+        ("HostNameLength", '<H=len(self["HostName"])//2'),
+        ("UserNameOffset", "<H=0"),
+        ("UserNameLength", '<H=len(self["UserName"])//2'),
+        ("PasswordOffset", "<H=0"),
+        ("PasswordLength", '<H=len(self["Password"])//2'),
+        ("AppNameOffset", "<H"),
+        ("AppNameLength", '<H=len(self["AppName"])//2'),
+        ("ServerNameOffset", "<H"),
+        ("ServerNameLength", '<H=len(self["ServerName"])//2'),
+        ("ExtensionOffset", "<H=0"),
+        ("ExtensionLength", "<H=0"),
+        ("CltIntNameOffset", "<H"),
+        ("CltIntNameLength", '<H=len(self["CltIntName"])//2'),
+        ("LanguageOffset", "<H=0"),
+        ("LanguageLength", '<H=len(self["Language"])//2'),
+        ("DatabaseOffset", "<H=0"),
+        ("DatabaseLength", '<H=len(self["Database"])//2'),
+        ("ClientID", '6s=b"\x01\x02\x03\x04\x05\x06"'),
+        ("SSPIOffset", "<H"),
+        ("SSPILength", '<H=min(len(self["SSPI"]), 0xFFFF)'),
+        ("AtchDBFileOffset", "<H"),
+        ("AtchDBFileLength", '<H=len(self["AtchDBFile"])//2'),
+        ("ChangePasswordOffset", "<H=0"),
+        ("ChangePasswordLength", '<H=len(self["ChangePassword"])//2'),
+        ("SSPILongLength", "<L=0"),
+        ("HostName", ":"),
+        ("UserName", ":"),
+        ("Password", ":"),
+        ("AppName", ":"),
+        ("ServerName", ":"),
+        ("ExtensionOffsetData", ":"),
+        ("CltIntName", ":"),
+        ("Language", ":"),
+        ("Database", ":"),
+        ("SSPI", ":"),
+        ("AtchDBFile", ":"),
+        ("ChangePassword", ":"),
+        ("FeatureExtData", ":"),
+    )
+
+    def __init__(self, data=None):
+        Structure.__init__(self, data)
+        if data is None:
+            self["HostName"] = b""
+            self["UserName"] = ""
+            self["Password"] = ""
+            self["AppName"] = b""
+            self["ServerName"] = b""
+            self["CltIntName"] = b""
+            self["SSPI"] = b""
+            self["OptionFlags2"] = 0
+            self["OptionFlags3"] = 0
+            self["Language"] = ""
+            self["Database"] = ""
+            self["AtchDBFile"] = ""
+            self["ChangePassword"] = ""
+            self["ExtensionOffsetData"] = b""
+            self["FeatureExtData"] = b""
+
+    def _uses_74_plus_layout(self):
+        # Structure.getData() applies the declared LOGIN7 default later, so
+        # serializer-side layout checks must tolerate an unset TDSVersion.
+        tds_version = self.fields.get("TDSVersion", TDS_LOGIN7_VERSION_71)
+        return tds_version >= TDS_LOGIN7_VERSION_74
+
+    def _pack_feature_ext(self, feature_id, payload):
+        return struct.pack("<BL", feature_id, len(payload)) + payload
+
+    def _build_feature_ext(self):
+        return b""
+
+    def fromString(self, data):
+        Structure.fromString(self, data)
+        if self["HostNameLength"] > 0:
+            self["HostName"] = data[self["HostNameOffset"] :][
+                : self["HostNameLength"] * 2
+            ]
+
+        if self["UserNameLength"] > 0:
+            self["UserName"] = data[self["UserNameOffset"] :][
+                : self["UserNameLength"] * 2
+            ]
+
+        if self["PasswordLength"] > 0:
+            self["Password"] = data[self["PasswordOffset"] :][
+                : self["PasswordLength"] * 2
+            ]
+
+        if self["AppNameLength"] > 0:
+            self["AppName"] = data[self["AppNameOffset"] :][: self["AppNameLength"] * 2]
+
+        if self["ServerNameLength"] > 0:
+            self["ServerName"] = data[self["ServerNameOffset"] :][
+                : self["ServerNameLength"] * 2
+            ]
+
+        if self["CltIntNameLength"] > 0:
+            self["CltIntName"] = data[self["CltIntNameOffset"] :][
+                : self["CltIntNameLength"] * 2
+            ]
+
+        if self["LanguageLength"] > 0:
+            self["Language"] = data[self["LanguageOffset"] :][
+                : self["LanguageLength"] * 2
+            ]
+
+        if self["DatabaseLength"] > 0:
+            self["Database"] = data[self["DatabaseOffset"] :][
+                : self["DatabaseLength"] * 2
+            ]
+
+        if self["SSPILength"] > 0:
+            sspi_len = self["SSPILongLength"] or self["SSPILength"]
+            self["SSPI"] = data[self["SSPIOffset"] :][: sspi_len]
+
+        if self["AtchDBFileLength"] > 0:
+            self["AtchDBFile"] = data[self["AtchDBFileOffset"] :][
+                : self["AtchDBFileLength"] * 2
+            ]
+
+        if self["ChangePasswordLength"] > 0:
+            self["ChangePassword"] = data[self["ChangePasswordOffset"] :][
+                : self["ChangePasswordLength"] * 2
+            ]
+
+        if self["ExtensionLength"] >= 4 and self["ExtensionOffset"] + 4 <= len(data):
+            self["ExtensionOffsetData"] = data[
+                self["ExtensionOffset"] : self["ExtensionOffset"] + 4
+            ]
+            feature_ext_offset = struct.unpack("<L", self["ExtensionOffsetData"])[0]
+            if feature_ext_offset < len(data):
+                self["FeatureExtData"] = data[feature_ext_offset:]
+
+    def getData(self):
+        uses_74_plus_layout = self._uses_74_plus_layout()
+        feature_ext_data = self._build_feature_ext() if uses_74_plus_layout else b""
+        has_feature_ext = bool(feature_ext_data)
+        # Fixed LOGIN7 header size before any variable-length payload begins.
+        index = 94
+        self["HostNameOffset"] = index
+
+        index += len(self["HostName"])
+
+        if self["UserName"] != "":
+            self["UserNameOffset"] = index
+        else:
+            self["UserNameOffset"] = 0
+
+        index += len(self["UserName"])
+
+        if self["Password"] != "":
+            self["PasswordOffset"] = index
+        else:
+            self["PasswordOffset"] = 0
+
+        index += len(self["Password"])
+
+        self["AppNameOffset"] = index
+        index = self["AppNameOffset"] + len(self["AppName"])
+        self["ServerNameOffset"] = index
+        index += len(self["ServerName"])
+
+        if uses_74_plus_layout:
+            self["OptionFlags3"] = self.fields.get("OptionFlags3", 0) | 0x08
+            self["FeatureExtData"] = feature_ext_data
+            self["ExtensionOffset"] = index if has_feature_ext else 0
+            self["ExtensionLength"] = 4 if has_feature_ext else 0
+            if has_feature_ext:
+                self["OptionFlags3"] |= 0x10
+                index += 4
+        else:
+            self["FeatureExtData"] = b""
+            self["ExtensionOffsetData"] = b""
+            self["ExtensionOffset"] = 0
+            self["ExtensionLength"] = 0
+            self["OptionFlags3"] = self.fields.get("OptionFlags3", 0) & ~0x10
+
+        self["CltIntNameOffset"] = index
+        index += len(self["CltIntName"])
+
+        self["LanguageOffset"] = index
+        index += len(self["Language"])
+
+        self["DatabaseOffset"] = index
+        index += len(self["Database"])
+
+        self["SSPIOffset"] = index
+        index += len(self["SSPI"])
+
+        self["AtchDBFileOffset"] = index
+        index += len(self["AtchDBFile"])
+
+        self["ChangePasswordOffset"] = index
+        index += len(self["ChangePassword"])
+
+        if has_feature_ext:
+            self["ExtensionOffsetData"] = struct.pack("<L", index)
+        else:
+            self["ExtensionOffsetData"] = b""
+
+        self["SSPILongLength"] = len(self["SSPI"]) if len(self["SSPI"]) > 0xFFFF else 0
+        return Structure.getData(self)
+
+
+class TDS_LOGIN_ACK(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Length", "<H"),
+        ("Interface", "<B"),
+        ("TDSVersion", ">L"),
+        ("ProgNameLen", "<B"),
+        ("_ProgNameLen", "_-ProgName", 'self["ProgNameLen"]*2'),
+        ("ProgName", ":"),
+        ("MajorVer", "<B"),
+        ("MinorVer", "<B"),
+        ("BuildNumHi", "<B"),
+        ("BuildNumLow", "<B"),
+    )
+
+
+class TDS_FEATUREEXTACK(Structure):
+    structure = ()
+
+    def __init__(self, data=None):
+        Structure.__init__(self)
+        self["TokenType"] = TDS_FEATUREEXTACK_TOKEN
+        self["Features"] = []
+        self["FeatureAckData"] = {}
+        self["FedAuth"] = None
+        self["FedAuthNonce"] = None
+        self["FedAuthSignature"] = None
+        self["UTF8Support"] = None
+
+        if data is not None:
+            self.fromString(data)
+
+    def fromString(self, data):
+        if len(data) < 1:
+            raise Exception("Truncated FEATUREEXTACK token")
+
+        token_type = struct.unpack("<B", data[:1])[0]
+        if token_type != TDS_FEATUREEXTACK_TOKEN:
+            raise Exception("Invalid FEATUREEXTACK token type 0x%x" % token_type)
+
+        offset = 1
+        features = []
+        feature_ack_data = {}
+        self["FedAuth"] = None
+        self["FedAuthNonce"] = None
+        self["FedAuthSignature"] = None
+        self["UTF8Support"] = None
+
+        # FEATUREEXTACK is a sequence of [feature id, uint32 length, payload]
+        # entries terminated by 0xFF.
+        while True:
+            if offset >= len(data):
+                raise Exception("Unterminated FEATUREEXTACK token")
+
+            feature_id = struct.unpack("<B", data[offset : offset + 1])[0]
+            offset += 1
+
+            if feature_id == TDS_FEATURE_EXT_TERMINATOR:
+                break
+
+            if offset + 4 > len(data):
+                raise Exception("Truncated FEATUREEXTACK length")
+
+            feature_len = struct.unpack("<L", data[offset : offset + 4])[0]
+            offset += 4
+
+            if offset + feature_len > len(data):
+                raise Exception("Truncated FEATUREEXTACK payload")
+
+            feature_data = data[offset : offset + feature_len]
+            offset += feature_len
+
+            features.append((feature_id, feature_data))
+            feature_ack_data[feature_id] = feature_data
+
+            if feature_id == TDS_FEATURE_EXT_FEDAUTH:
+                self["FedAuth"] = feature_data
+                if feature_len >= 32:
+                    self["FedAuthNonce"] = feature_data[:32]
+                if feature_len >= 64:
+                    self["FedAuthSignature"] = feature_data[32:64]
+            elif feature_id == TDS_FEATURE_EXT_UTF8_SUPPORT and feature_len > 0:
+                self["UTF8Support"] = feature_data[0] != 0
+
+        self["TokenType"] = token_type
+        self["Features"] = features
+        self["FeatureAckData"] = feature_ack_data
+        self.data = data[:offset]
+        self.rawData = data[:offset]
+        return self
+
+
+class TDS_RETURNSTATUS(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Value", "<L"),
+    )
+
+
+class TDS_INFO_ERROR(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Length", '<H=12+len(self["MsgText"])+len(self["ServerName"])+len(self["ProcName"])'),
+        ("Number", "<L"),
+        ("State", "<B"),
+        ("Class", "<B"),
+        ("MsgTextLen", "<H"),
+        ("_MsgTextLen", "_-MsgText", 'self["MsgTextLen"]*2'),
+        ("MsgText", ":"),
+        ("ServerNameLen", "<B"),
+        ("_ServerNameLen", "_-ServerName", 'self["ServerNameLen"]*2'),
+        ("ServerName", ":"),
+        ("ProcNameLen", "<B"),
+        ("_ProcNameLen", "_-ProcName", 'self["ProcNameLen"]*2'),
+        ("ProcName", ":"),
+        ("LineNumber", "<H"),
+    )
+
+
+class TDS_INFO_ERROR72(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Length", '<H=14+len(self["MsgText"])+len(self["ServerName"])+len(self["ProcName"])'),
+        ("Number", "<L"),
+        ("State", "<B"),
+        ("Class", "<B"),
+        ("MsgTextLen", "<H"),
+        ("_MsgTextLen", "_-MsgText", 'self["MsgTextLen"]*2'),
+        ("MsgText", ":"),
+        ("ServerNameLen", "<B"),
+        ("_ServerNameLen", "_-ServerName", 'self["ServerNameLen"]*2'),
+        ("ServerName", ":"),
+        ("ProcNameLen", "<B"),
+        ("_ProcNameLen", "_-ProcName", 'self["ProcNameLen"]*2'),
+        ("ProcName", ":"),
+        ("LineNumber", "<L"),
+    )
+
+
+class TDS_ENVCHANGE(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Length", "<H=4+len(Data)"),
+        ("Type", "<B"),
+        ("_Data", "_-Data", 'self["Length"]-1'),
+        ("Data", ":"),
+    )
+
+
+class TDS_DONEINPROC(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Status", "<H"),
+        ("CurCmd", "<H"),
+        ("DoneRowCount", "<L"),
+    )
+
+
+class TDS_DONEINPROC72(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Status", "<H"),
+        ("CurCmd", "<H"),
+        ("DoneRowCount", "<Q"),
+    )
+
+
+class TDS_ORDER(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Length", "<H"),
+        ("_Data", "_-Data", 'self["Length"]'),
+        ("Data", ":"),
+    )
+
+
+class TDS_ENVCHANGE_VARCHAR(Structure):
+    structure = (
+        ("NewValueLen", "<B=len(NewValue)"),
+        ("_NewValue", "_-NewValue", 'self["NewValueLen"]*2'),
+        ("NewValue", ":"),
+        ("OldValueLen", "<B=len(OldValue)"),
+        ("_OldValue", "_-OldValue", 'self["OldValueLen"]*2'),
+        ("OldValue", ":"),
+    )
+
+
+class TDS_ROW(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Data", ":"),
+    )
+
+
+class TDS_DONE(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Status", "<H"),
+        ("CurCmd", "<H"),
+        ("DoneRowCount", "<L"),
+    )
+
+
+class TDS_DONE72(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Status", "<H"),
+        ("CurCmd", "<H"),
+        ("DoneRowCount", "<Q"),
+    )
+
+
+class TDS_COLMETADATA(Structure):
+    structure = (
+        ("TokenType", "<B"),
+        ("Count", "<H"),
+        ("Data", ":"),
+    )
+
+
+class TDS_SSVARIANT(Structure):
+    """
+    SQL Server Variant Type Structure.
+
+    As defined in [MS-TDS] 2.2.5.5.4 sql_variant Values:
+
+    The SSVARIANTTYPE is a special data type that acts as a place holder for other data types.
+    When a SSVARIANTTYPE is filled with a data value, it takes on properties of the base data
+    type that represents the data value.
+
+    Structure Definition:
+        VARIANT_BASETYPE    = BYTE      ; data type definition
+        VARIANT_PROPBYTES   = BYTE      ; see below
+        VARIANT_PROPERTIES  = *BYTE     ; see below
+        VARIANT_DATAVAL     = 1*BYTE    ; actual data value
+
+        SSVARIANT_INSTANCE  = VARIANT_BASETYPE
+                              VARIANT_PROPBYTES
+                              VARIANT_PROPERTIES
+                              VARIANT_DATAVAL
+
+    VARIANT_PROPBYTES and VARIANT_PROPERTIES by VARIANT_BASETYPE:
+
+    | VARIANT_BASETYPE                     | VARIANT_PROPBYTES | VARIANT_PROPERTIES                    |
+    |--------------------------------------|-------------------|---------------------------------------|
+    | GUIDTYPE, BITTYPE,                   | 0                 | <not specified>                       |
+    | INT1TYPE, INT2TYPE,                  |                   |                                       |
+    | INT4TYPE, INT8TYPE,                  |                   |                                       |
+    | DATETIMETYPE, DATETIM4TYPE,          |                   |                                       |
+    | FLT4TYPE, FLT8TYPE,                  |                   |                                       |
+    | MONEYTYPE, MONEY4TYPE,               |                   |                                       |
+    | DATENTYPE                            |                   |                                       |
+    |--------------------------------------|-------------------|---------------------------------------|
+    | TIMENTYPE,                           | 1                 | 1 byte specifying scale               |
+    | DATETIME2NTYPE,                      |                   |                                       |
+    | DATETIMEOFFSETNTYPE                  |                   |                                       |
+    |--------------------------------------|-------------------|---------------------------------------|
+    | BIGVARBINARYTYPE,                    | 2                 | 2 bytes specifying max length         |
+    | BIGBINARYTYPE                        |                   |                                       |
+    |--------------------------------------|-------------------|---------------------------------------|
+    | NUMERICNTYPE,                        | 2                 | 1 byte for precision followed by      |
+    | DECIMALNTYPE                         |                   | 1 byte for scale                      |
+    |--------------------------------------|-------------------|---------------------------------------|
+    | BIGVARCHARTYPE, BIGCHARTYPE,         | 7                 | 5-byte COLLATION, followed by a       |
+    | NVARCHARTYPE, NCHARTYPE              |                   | 2-byte max length                     |
+    |--------------------------------------|-------------------|---------------------------------------|
+
+    Note: Data types cannot be NULL when inside a sql_variant. If the value is NULL,
+    the sql_variant itself has to be NULL (TotalLength = 0).
+    """
+
+    structure = (
+        ("TotalLength", "<L=0"),
+        ("Data", ":"),
+    )
+
+    def __init__(self, data=None):
+        Structure.__init__(self, data)
+        self.baseType = None
+        self.propBytes = None
+        self.properties = None
+        self.value = None
+
+    def parse(self):
+        """
+        Parse the sql_variant data and extract the base type, properties, and value.
+
+        Returns:
+            Parsed value in its appropriate Python type, or None if empty
+        """
+        if self["TotalLength"] == 0:
+            return None
+
+        data = self["Data"]
+
+        # Read BaseType (1 byte)
+        self.baseType = struct.unpack("<B", data[:1])[0]
+        data = data[1:]
+
+        # Read PropBytes (1 byte)
+        self.propBytes = struct.unpack("<B", data[:1])[0]
+        data = data[1:]
+
+        # Extract type-specific properties
+        self.properties = data[: self.propBytes]
+        data = data[self.propBytes :]
+
+        # Calculate the actual data length
+        dataLength = self["TotalLength"] - 2 - self.propBytes
+        valueData = data[:dataLength]
+
+        # Parse value based on BaseType
+        self.value = self._parseValue(self.baseType, valueData, self.properties)
+        return self.value
+
+    def _parseValue(self, baseType, data, properties):
+        """
+        Parse the value based on the base type following MS-TDS 2.2.5.5.4.
+
+        Args:
+            baseType: The SQL Server base type identifier (VARIANT_BASETYPE)
+            data: The raw data bytes containing the value (VARIANT_DATAVAL)
+            properties: Type-specific property bytes (VARIANT_PROPERTIES)
+
+        Returns:
+            Parsed value in appropriate Python type
+        """
+        try:
+            # Types with VARIANT_PROPBYTES = 0 (no properties)
+            if baseType == TDS_INT1TYPE:
+                return struct.unpack("<B", data[:1])[0]
+            elif baseType == TDS_INT2TYPE:
+                return struct.unpack("<h", data[:2])[0]
+            elif baseType == TDS_INT4TYPE:
+                return struct.unpack("<l", data[:4])[0]
+            elif baseType == TDS_INT8TYPE:
+                return struct.unpack("<q", data[:8])[0]
+
+            # Bit type
+            elif baseType == TDS_BITTYPE:
+                return struct.unpack("<B", data[:1])[0]
+
+            # Floating point types
+            elif baseType == TDS_FLT4TYPE:
+                return struct.unpack("<f", data[:4])[0]
+            elif baseType == TDS_FLT8TYPE:
+                return struct.unpack("<d", data[:8])[0]
+
+            # Unicode character types
+            elif baseType in (TDS_NVARCHARTYPE, TDS_NCHARTYPE):
+                # Properties: Collation (5 bytes) + MaxLength (2 bytes)
+                return data.decode("utf-16le")
+
+            # ANSI character types
+            elif baseType in (
+                TDS_VARCHARTYPE,
+                TDS_CHARTYPE,
+                TDS_BIGVARCHRTYPE,
+                TDS_BIGCHARTYPE,
+            ):
+                # Properties: Collation (5 bytes) + MaxLength (varies)
+                # Try UTF-8 first, fallback to latin-1
+                try:
+                    return data.decode("utf-8")
+                except UnicodeDecodeError:
+                    return data.decode("latin-1")
+
+            # Binary types
+            elif baseType in (
+                TDS_VARBINARYTYPE,
+                TDS_BINARYTYPE,
+                TDS_BIGVARBINTYPE,
+                TDS_BIGBINARYTYPE,
+            ):
+                return binascii.b2a_hex(data).decode("ascii")
+
+            # Money types
+            elif baseType == TDS_MONEY4TYPE:
+                value = struct.unpack("<l", data[:4])[0]
+                return Decimal(value) / Decimal(10000)
+            elif baseType == TDS_MONEYTYPE:
+                # Money: first 4 bytes are the high-order signed dword (little-endian),
+                # next 4 bytes are the low-order unsigned dword (little-endian).
+                high, low = struct.unpack("<lL", data[:8])
+                value = (high << 32) + low
+                return Decimal(value) / Decimal(10000)
+
+            # GUID type
+            elif baseType == TDS_GUIDTYPE:
+                return uuid.bin_to_string(data)
+
+            # Datetime types
+            elif baseType == TDS_DATETIMETYPE:
+                # 4 bytes days + 4 bytes time
+                dateValue = struct.unpack("<l", data[:4])[0]
+                timeValue = struct.unpack("<L", data[4:8])[0]
+                baseDate = datetime.date(1900, 1, 1)
+                dateValue = datetime.date.fromordinal(baseDate.toordinal() + dateValue)
+                hours, mod = divmod(timeValue // 300, 60 * 60)
+                minutes, second = divmod(mod, 60)
+                return datetime.datetime(
+                    dateValue.year,
+                    dateValue.month,
+                    dateValue.day,
+                    hours,
+                    minutes,
+                    second,
+                )
+
+            elif baseType == TDS_DATETIM4TYPE:
+                # 2 bytes days + 2 bytes minutes
+                dateValue = struct.unpack("<H", data[:2])[0]
+                timeValue = struct.unpack("<H", data[2:4])[0]
+                baseDate = datetime.date(1900, 1, 1)
+                dateValue = datetime.date.fromordinal(baseDate.toordinal() + dateValue)
+                hours, minutes = divmod(timeValue, 60)
+                return datetime.datetime(
+                    dateValue.year, dateValue.month, dateValue.day, hours, minutes, 0
+                )
+
+            elif baseType == TDS_DATENTYPE:
+                # date: 3-byte unsigned integer (days since year 1)
+                # VARIANT_PROPBYTES = 0
+                if len(data) < 3:
+                    return None
+                dateValue = struct.unpack("<L", data[:3] + b"\x00")[0]
+                return datetime.date.fromordinal(dateValue)
+
+            # Types with VARIANT_PROPBYTES = 1 (1 byte for scale)
+            # TIMENTYPE, DATETIME2NTYPE, DATETIMEOFFSETNTYPE
+
+            elif baseType == TDS_TIMENTYPE:
+                # time(n): scale in properties[0]
+                scale = properties[0] if len(properties) > 0 else 7
+                # Time is stored as 3-5 bytes depending on scale
+                timeBytes = len(data)
+                if timeBytes == 3:
+                    timeValue = struct.unpack("<L", data[:3] + b"\x00")[0]
+                elif timeBytes == 4:
+                    timeValue = struct.unpack("<L", data[:4])[0]
+                elif timeBytes == 5:
+                    timeValue = struct.unpack("<Q", data[:5] + b"\x00\x00\x00")[0]
+                else:
+                    return f"<unsupported time bytes: {timeBytes}>"
+
+                # Convert to time (stored in 10^-scale second units)
+                divisor = 10**scale
+                seconds = timeValue / divisor
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                secs = int(seconds % 60)
+                microsecs = int((seconds % 1) * 1000000)
+                return datetime.time(hours, minutes, secs, microsecs)
+
+            elif baseType == TDS_DATETIME2NTYPE:
+                # datetime2(n): scale in properties[0]
+                scale = properties[0] if len(properties) > 0 else 7
+                # Time part (3-5 bytes) + Date part (3 bytes)
+                timeBytes = 3 if scale <= 2 else (4 if scale <= 4 else 5)
+
+                if len(data) < timeBytes + 3:
+                    return None
+
+                # Parse time part
+                if timeBytes == 3:
+                    timeValue = struct.unpack("<L", data[:3] + b"\x00")[0]
+                elif timeBytes == 4:
+                    timeValue = struct.unpack("<L", data[:4])[0]
+                else:  # 5 bytes
+                    timeValue = struct.unpack("<Q", data[:5] + b"\x00\x00\x00")[0]
+
+                data = data[timeBytes:]
+
+                # Parse date part (3 bytes)
+                dateValue = struct.unpack("<L", data[:3] + b"\x00")[0]
+
+                # Convert to datetime
+                divisor = 10**scale
+                seconds = timeValue / divisor
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                secs = int(seconds % 60)
+                microsecs = int((seconds % 1) * 1000000)
+
+                date_obj = datetime.date.fromordinal(dateValue)
+                return datetime.datetime(
+                    date_obj.year,
+                    date_obj.month,
+                    date_obj.day,
+                    hours,
+                    minutes,
+                    secs,
+                    microsecs,
+                )
+
+            elif baseType == TDS_DATETIMEOFFSETNTYPE:
+                # datetimeoffset(n): scale in properties[0]
+                scale = properties[0] if len(properties) > 0 else 7
+                # Time (3-5 bytes) + Date (3 bytes) + Offset (2 bytes signed)
+                timeBytes = 3 if scale <= 2 else (4 if scale <= 4 else 5)
+
+                if len(data) < timeBytes + 5:
+                    return None
+
+                # Parse time part
+                if timeBytes == 3:
+                    timeValue = struct.unpack("<L", data[:3] + b"\x00")[0]
+                elif timeBytes == 4:
+                    timeValue = struct.unpack("<L", data[:4])[0]
+                else:  # 5 bytes
+                    timeValue = struct.unpack("<Q", data[:5] + b"\x00\x00\x00")[0]
+
+                data = data[timeBytes:]
+
+                # Parse date part (3 bytes)
+                dateValue = struct.unpack("<L", data[:3] + b"\x00")[0]
+                data = data[3:]
+
+                # Parse offset (2 bytes signed, minutes)
+                offsetMinutes = struct.unpack("<h", data[:2])[0]
+
+                # Convert to datetime with timezone
+                divisor = 10**scale
+                seconds = timeValue / divisor
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                secs = int(seconds % 60)
+                microsecs = int((seconds % 1) * 1000000)
+
+                date_obj = datetime.date.fromordinal(dateValue)
+                dt = datetime.datetime(
+                    date_obj.year,
+                    date_obj.month,
+                    date_obj.day,
+                    hours,
+                    minutes,
+                    secs,
+                    microsecs,
+                )
+
+                # Create timezone-aware datetime
+                tz = datetime.timezone(datetime.timedelta(minutes=offsetMinutes))
+                return dt.replace(tzinfo=tz)
+
+            # Types with VARIANT_PROPBYTES = 2 or 7
+            # Numeric/Decimal types (VARIANT_PROPBYTES = 2)
+            elif baseType in (TDS_NUMERICNTYPE, TDS_DECIMALNTYPE):
+                # Properties: precision (1 byte) + scale (1 byte)
+                precision = properties[0] if len(properties) > 0 else 0
+                scale = properties[1] if len(properties) > 1 else 0
+
+                if len(data) == 0:
+                    return None
+
+                # First byte is sign (1 = positive, 0 = negative)
+                sign = 1 if data[0] == 1 else -1
+
+                # Remaining bytes are the number in little-endian format
+                numBytes = data[1:]
+                value = int.from_bytes(numBytes, byteorder="little", signed=False)
+
+                getcontext().prec = precision
+
+                number = Decimal(value)
+                if scale:
+                    number /= Decimal(10) ** scale
+
+                if sign < 0:
+                    number = -number
+
+                return number
+
+            # For unsupported types, return hex representation
+            else:
+                return f"0x{binascii.b2a_hex(data).decode('ascii')}"
+
+        except Exception as e:
+            # If parsing fails, return hex representation with error note
+            return f"<parse_error: {str(e)}, hex: {binascii.b2a_hex(data).decode('ascii')}>"
+
+
+class MSSQL:
+    def __init__(
+        self,
+        address,
+        port=1433,
+        remoteName="",
+        workstation_id: str = "",
+        application_name: str = "",
+        client_interface_name: str = "",
+        rowsPrinter=DummyPrint(),
+    ):
+        # self.packetSize = 32764
+        self.packetSize = 32763
+        self.server = address
+        self.remoteName = remoteName
+        self.port = port
+        self.socket = 0
+        self.replies = {}
+        self.colMeta = []
+        self.rows = []
+        self.currentDB = ""
+        self.COL_SEPARATOR = "  "
+        self.MAX_COL_LEN = 255
+        self.lastError = False
+        self.tlsSocket = None
+        self.tls_unique = None
+        self.tds8 = False
+        self.in_bio = None
+        self.out_bio = None
+        self._recv_buffer = b""
+        self.login_tds_version = TDS_LOGIN7_VERSION_71
+        self.__rowsPrinter = rowsPrinter
+        self.mssql_version = ""
+
+        self._workstation_id = workstation_id or f"DESKTOP-{uuid4().hex[:8].upper()}"
+        self._application_name = (
+            application_name or "Microsoft SQL Server Management Studio - Query"
+        )
+        self._client_interface_name = (client_interface_name or "Framework Microsoft SqlClient Data Provider for SQL Server")
+
+    # With Kerberos we need to know to which MSSQL instance we are going to connect (to compute the SPN)
+    # As such we need to be able to list these instances which is what this code does
+    def getInstances(self, timeout=5):
+        packet = SQLR()
+        packet["OpCode"] = SQLR_CLNT_UCAST_EX
+
+        # Open the connection
+        af, socktype, proto, canonname, sa = socket.getaddrinfo(
+            self.server, SQLR_PORT, 0, socket.SOCK_DGRAM
+        )[0]
+        s = socket.socket(af, socktype, proto)
+
+        s.sendto(packet.getData(), 0, (self.server, SQLR_PORT))
+        ready, _, _ = select.select([s.fileno()], [], [], timeout)
+        if not ready:
+            return []
+        else:
+            data, _ = s.recvfrom(65536, 0)
+
+        s.close()
+        resp = SQLR_Response(data)
+
+        # Now parse the results
+        entries = resp["Data"].split(b";;")
+
+        # We don't want the last one, it's empty
+        entries.pop()
+
+        # the answer to send back
+        resp = []
+
+        for i, entry in enumerate(entries):
+            fields = entry.split(b";")
+            ret = {}
+            for j, field in enumerate(fields):
+                if (j & 0x1) == 0:
+                    ret[field.decode("utf-8")] = fields[j + 1].decode("utf-8")
+            resp.append(ret)
+
+        return resp
+
+    # This is where we compute the pre login TDS packet
+    def preLogin(self):
+        # First we initiate the structure
+        prelogin = TDS_PRELOGIN()
+        # Then we fill the version of the MSSQL client we use
+        prelogin["Version"] = b"\x08\x00\x01\x55\x00\x00"
+        # We specify we support encryption but don't want it
+        prelogin["Encryption"] = TDS_ENCRYPT_OFF
+        # Random threadID because we don't care about this
+        prelogin["ThreadID"] = struct.pack("<L", random.randint(0, 65535))
+        # The instance name
+        prelogin["Instance"] = b"MSSQLServer\x00"
+        # We send the prelogin packet, receive the response from the server
+        self.sendTDS(TDS_PRE_LOGIN, prelogin.getData(), 0)
+        tds = self.recvTDS()
+        response = TDS_PRELOGIN(tds["Data"])
+        self.mssql_version = MSSQL_VERSION(response["Version"])
+        # And return the result to the Login or KerberosLogin functions for futher parsing
+        return response
+
+    def encryptPassword(self, password):
+        return bytes(
+            bytearray(
+                [
+                    ((x & 0x0F) << 4) + ((x & 0xF0) >> 4) ^ 0xA5
+                    for x in bytearray(password)
+                ]
+            )
+        )
+
+    def _reset_tls_state(self):
+        self.tlsSocket = None
+        self.tls_unique = None
+        self.tds8 = False
+        self.in_bio = None
+        self.out_bio = None
+        self._recv_buffer = b""
+        self.login_tds_version = TDS_LOGIN7_VERSION_71
+
+    def _has_active_tls_channel_binding(self):
+        return self.tls_unique is not None and (
+            self.tds8 or self.tlsSocket is not None
+        )
+
+    def _get_default_login7_tds_version(self):
+        # TDS 8.0 is negotiated by the TLS handshake, but the LOGIN7 payload still
+        # needs to use the modern 7.4-era layout and extensions.
+        return TDS_LOGIN7_VERSION_74 if self.tds8 else TDS_LOGIN7_VERSION_71
+
+    def _set_session_login7_tds_version(self, tds_version):
+        self.login_tds_version = tds_version
+
+    def _uses_72_plus_token_layout(self):
+        return login7_uses_72_plus_token_layout(self.login_tds_version)
+
+    def _parse_info_error_token(self, tokens):
+        parser = TDS_INFO_ERROR72 if self._uses_72_plus_token_layout() else TDS_INFO_ERROR
+        return parser(tokens)
+
+    def _parse_done_token(self, tokens, inproc=False):
+        # Once the session is using a coherent LOGIN7 version, DONE rowcount width
+        # follows that negotiated login version directly.
+        if self._uses_72_plus_token_layout():
+            parser = TDS_DONEINPROC72 if inproc else TDS_DONE72
+        else:
+            parser = TDS_DONEINPROC if inproc else TDS_DONE
+        return parser(tokens)
+
+    def connect(self, timeout=30):
+        self._reset_tls_state()
+        af, socktype, proto, canonname, sa = socket.getaddrinfo(
+            self.server, self.port, 0, socket.SOCK_STREAM
+        )[0]
+        sock = socket.socket(af, socktype, proto)
+        sock.settimeout(timeout)
+
+        try:
+            sock.connect(sa)
+        except Exception:
+            # import traceback
+            # traceback.print_exc()
+            raise
+
+        self.socket = sock
+        return sock
+
+    def disconnect(self):
+        try:
+            if self.socket:
+                return self.socket.close()
+        finally:
+            self.socket = 0
+            self._reset_tls_state()
+
+    def setPacketSize(self, packetSize):
+        self.packetSize = packetSize
+
+    def getPacketSize(self):
+        return self.packetSize
+
+    #################### SEND DATA #####################################################################
+
+    # This function is the generic sendTDS packet which is used to embed data into a regular TDS packet
+    # Once the TDS packet is computed, it is send to the socketSendall function that will check
+    # whether or not we have to encrypt the packets
+    def sendTDS(self, packetType, data, packetID=1):
+        if (len(data) - 8) > self.packetSize:
+            remaining = data[self.packetSize - 8 :]
+            tds = TDSPacket()
+            tds["Type"] = packetType
+            tds["Status"] = TDS_STATUS_NORMAL
+            tds["PacketID"] = packetID
+            tds["Data"] = data[: self.packetSize - 8]
+            self.socketSendall(tds.getData())
+
+            while len(remaining) > (self.packetSize - 8):
+                packetID += 1
+                tds["PacketID"] = packetID
+                tds["Data"] = remaining[: self.packetSize - 8]
+                self.socketSendall(tds.getData())
+                remaining = remaining[self.packetSize - 8 :]
+            data = remaining
+            packetID += 1
+
+        tds = TDSPacket()
+        tds["Type"] = packetType
+        tds["Status"] = TDS_STATUS_EOM
+        tds["PacketID"] = packetID
+        tds["Data"] = data
+        self.socketSendall(tds.getData())
+
+    # This function is a wrapper that is used to dispatch packets to send depending of the TLS context
+    def socketSendall(self, data):
+        if self.tlsSocket is None:
+            # socket.sendall() is the basic function used to send data over the network
+            return self.socket.sendall(data)
+        else:
+            # tls_send is the one to use when dealing with TLS
+            return self.tls_send(data)
+
+    # If the socket is tlsSocket (means we have a TLS context) then we need to send the data to the TLS context
+    # Then we'll retrieve the encrypted data from the self.out_bio the in_bio which is encrypted
+    # Finally we call the sendall function to the send the encrypted data
+    def tls_send(self, data):
+        # First we send the data into the TLS context
+        self.tlsSocket.write(data)
+        # Then we read the encrypted result from the TLS context
+        while True:
+            try:
+                # We retrieve the encrypted data from the TLS context
+                encrypted = self.out_bio.read(4096)
+                if not encrypted:
+                    break
+                # And we send the data
+                self.socket.sendall(encrypted)
+            except ssl.SSLWantReadError:
+                break
+            except ssl.SSLWantWriteError:
+                break
+            except ConnectionResetError as e:
+                LOG.error(f"[!] Connection reset when sending data: {e}")
+                raise
+
+    #################### SEND DATA #####################################################################
+
+    #################### READ DATA #####################################################################
+
+    # This function is the generic recvTDS packet which is used to extract data from a regular TDS packet
+    # Once the TDS packet is extracted, it is send to the socketRecv function that will check
+    # whether or not we have to decrypt the packets
+    def recvTDS(self, packetSize=None):
+        if packetSize is None:
+            packetSize = self.packetSize
+
+        packet = self._recv_tds_packet(packetSize)
+        status = packet["Status"]
+        while status != TDS_STATUS_EOM:
+            tmpPacket = self._recv_tds_packet(packetSize)
+            status = tmpPacket["Status"]
+            packet["Data"] += tmpPacket["Data"]
+            packet["Length"] += tmpPacket["Length"] - 8
+
+        return packet
+
+    def _recv_chunk(self, packetSize):
+        data = self.socketRecv(packetSize)
+        if not data:
+            raise ConnectionError("Server closed connection")
+        return data
+
+    def _recv_exact(self, length, packetSize):
+        while len(self._recv_buffer) < length:
+            self._recv_buffer += self._recv_chunk(packetSize)
+
+        data = self._recv_buffer[:length]
+        self._recv_buffer = self._recv_buffer[length:]
+        return data
+
+    def _recv_tds_packet(self, packetSize):
+        header = self._recv_exact(8, packetSize)
+        packet = TDSPacket(header)
+        packetLen = packet["Length"] - 8
+        packet["Data"] = self._recv_exact(packetLen, packetSize)
+        return packet
+
+    # This function is a wrapper that is used to dispatch packets to read depending of the TLS context
+    def socketRecv(self, bufsize):
+        if self.tlsSocket is None:
+            data = self.socket.recv(bufsize)
+            if not data:
+                raise ConnectionError("Server closed connection")
+            return data
+        else:
+            return self.tls_recv(bufsize)
+
+    # If the socket is tlsSocket (means we have a TLS context) then we need to read the date from it
+    # And apss it to the TLS context via the self.in_bio object which is going to decrypt it
+    def tls_recv(self, bufsize):
+        while True:
+            try:
+                # Try to read decrypted data first
+                decrypted = self.tlsSocket.read(bufsize)
+                if decrypted:
+                    return decrypted
+            except ssl.SSLWantReadError:
+                pass  # Means we need more encrypted bytes
+
+            # Read more encrypted bytes from the socket
+            encrypted = self.socket.recv(bufsize)
+            if not encrypted:
+                # Remote closed the connection
+                return b""
+
+            self.in_bio.write(encrypted)
+
+    #################### READ DATA #####################################################################
+
+    # This function returns the computed Channel Binding Token based on the tls-unique value
+    def generate_cbt_from_tls_unique(self):
+        channel_binding_struct = b""
+        initiator_address = b"\x00" * 8
+        acceptor_address = b"\x00" * 8
+        application_data_raw = b"tls-unique:" + self.tls_unique
+        len_application_data = len(application_data_raw).to_bytes(
+            4, byteorder="little", signed=False
+        )
+        application_data = len_application_data
+        application_data += application_data_raw
+        channel_binding_struct += initiator_address
+        channel_binding_struct += acceptor_address
+        channel_binding_struct += application_data
+        cbt_token = md5(channel_binding_struct).digest()
+        LOG.debug(f"Computed tls-unique CBT token: {cbt_token.hex()}")
+        return cbt_token
+
+    # This function is used to set the TLS context, process the handshak in memory
+    # And define all variables that will be used both by Login or KerberosLogin
+    def set_tls_context(self):
+        LOG.info("Encryption required, switching to TLS")
+        # Creates a TLS context
+        context = ssl.SSLContext()
+        context.set_ciphers("ALL:@SECLEVEL=0")
+        context.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+        context.verify_mode = ssl.CERT_NONE
+
+        # Here comes the important part, MSSQL server does not expect a raw TLS socket
+        # Instead it expects TDS packets to be sent in which TLS data is embedded
+        # Something like TDS_PACKET["Data"] = TLS_ENCRYPTED(data)
+        # To setup such a TLS tunnel inside another program, we need to use a STARTTLS like mechanism
+        # Which relies on MemoryBIO that are used to send data to the TLS context and receive data from it as well
+        # IN_BIO is where we send data to be encrypted and sent to the MSSQL server
+        in_bio = ssl.MemoryBIO()
+        # OUT_BIO is where we read data send by the MSSQL server inside a TDS packet
+        out_bio = ssl.MemoryBIO()
+
+        # Now we can create the TLS object that will be used to manage handshake and data processing
+        tls = context.wrap_bio(in_bio, out_bio)
+
+        # So first let's handshake with the remote MSSQL server
+        while True:
+            try:
+                # This sends the TLS client hello
+                tls.do_handshake()
+            except ssl.SSLWantReadError:
+                # If we get a SSLWantReadError then it means the server received enough data and want to send some to us
+                # So we read the data sent by the server and we send it back to it inside a TDS_PRE_LOGIN packet
+                # That's the actual TLS server hello
+                data = out_bio.read(4096)
+                self.sendTDS(TDS_PRE_LOGIN, data, 0)
+
+                # Now we read data one more time to extract the final TLS message
+                tds_packet = self.recvTDS(4096)
+                tls_data = tds_packet["Data"]
+
+                # And we send that data to the in_bio object to complete the handshake
+                in_bio.write(tls_data)
+            else:
+                break
+
+        # At this point the TLS context is set up so we just store object inside the MSSQL class
+        # That will be used to encryp/decrpt data and send them to the MSSQL server
+        self.packetSize = 16 * 1024 - 1
+        self.tlsSocket = tls
+        self.in_bio = in_bio
+        self.out_bio = out_bio
+
+        # Finally we retrieve the tls-unique value which is computed from the final TLS handshake message (this is the CBT token)
+        self.tls_unique = tls.get_channel_binding("tls-unique")
+
+    def _setup_tds8(self):
+        """Wrap the TCP socket in TLS for TDS 8.0 strict encryption."""
+        LOG.debug("(TDS8) Setting up TDS 8.0 strict encryption")
+        context = ssl.SSLContext()
+        context.set_ciphers('ALL:@SECLEVEL=0')
+        context.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+        # Cap at TLS 1.2: EPA channel binding requires tls-unique, which TLS 1.3
+        # removed (RFC 8446), SQL Server's SChannel does not appear to accept
+        # tls-server-end-point as a substitute for EPA, and SQL Server 2022 
+        # requires TLS 1.2 to be enabled in SChannel
+        context.maximum_version = ssl.TLSVersion.TLSv1_2
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        context.set_alpn_protocols(["tds/8.0"])
+        self.socket = context.wrap_socket(self.socket, server_hostname=self.server)
+        self.tds8 = True
+        self.packetSize = 16 * 1024 - 1
+        # Retrieve tls-unique for EPA channel binding
+        self.tls_unique = self.socket.get_channel_binding("tls-unique")
+        if self.tls_unique:
+            LOG.debug("(TDS8) tls-unique: %s" % self.tls_unique.hex())
+        else:
+            LOG.warning("(TDS8) No tls-unique available — EPA will fail if required")
+        LOG.info("(TDS8) TDS 8.0 TLS connection established")
+
+    @staticmethod
+    def _should_retry_prelogin_as_tds8(exc):
+        if isinstance(
+            exc,
+            (ConnectionError, ConnectionResetError, ConnectionAbortedError, BrokenPipeError),
+        ):
+            return True
+
+        if isinstance(exc, OSError):
+            return exc.errno in (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE)
+
+        return False
+
+    def _negotiate_encryption(self):
+        """Perform preLogin exchange and set up encryption.
+
+        Handles all encryption modes including TDS 8.0 strict encryption
+        where the server closes or resets the connection on a plain PRELOGIN.
+
+        Returns the preLogin response dict.
+        """
+        try:
+            resp = self.preLogin()
+        except Exception as e:
+            if not self._should_retry_prelogin_as_tds8(e):
+                raise
+
+            LOG.debug(
+                "Plain TDS preLogin failed (%s: %s), trying TDS 8.0"
+                % (type(e).__name__, e)
+            )
+            try:
+                self.disconnect()
+            except Exception:
+                pass
+            self.connect()
+            self._setup_tds8()
+            return self.preLogin()
+
+        # Handle server encryption response
+        if resp["Encryption"] == TDS_ENCRYPT_STRICT:
+            LOG.info("Server requires TDS 8.0 (ENCRYPT_STRICT), reconnecting with TLS")
+            self.disconnect()
+            self.connect()
+            self._setup_tds8()
+            return self.preLogin()
+        elif resp["Encryption"] in (TDS_ENCRYPT_REQ, TDS_ENCRYPT_ON, TDS_ENCRYPT_OFF):
+            self.set_tls_context()
+
+        return resp
+
+    def kerberosLogin(
+        self,
+        database,
+        username,
+        password="",
+        domain="",
+        hashes=None,
+        aesKey="",
+        kdcHost=None,
+        TGT=None,
+        TGS=None,
+        useCache=True,
+        cbt_fake_value=None,
+    ):
+        if hashes is not None:
+            lmhash, nthash = hashes.split(":")
+            lmhash = binascii.a2b_hex(lmhash)
+            nthash = binascii.a2b_hex(nthash)
+        else:
+            lmhash = ""
+            nthash = ""
+
+        resp = self._negotiate_encryption()
+
+        # That part is used to compute the Version field for the NTLM_NEGOTIATE and NTLM_AUTHENTICATE messages
+        self.version = ntlm.VERSION()
+        (
+            self.version["ProductMajorVersion"],
+            self.version["ProductMinorVersion"],
+            self.version["ProductBuild"],
+        ) = (10, 0, 20348)
+
+        login = TDS_LOGIN()
+        login["TDSVersion"] = self._get_default_login7_tds_version()
+        self._set_session_login7_tds_version(login["TDSVersion"])
+        login["HostName"] = self.workstation_id.encode("utf-16le")
+        login["AppName"] = self.application_name.encode("utf-16le")
+        login["ServerName"] = self.remoteName.encode("utf-16le")
+        login["CltIntName"] = self.client_interface_name.encode("utf-16le")
+        login["ClientPID"] = random.randint(0, 1024)
+        login["PacketSize"] = self.packetSize
+        if database is not None:
+            login["Database"] = database.encode("utf-16le")
+        login["OptionFlags2"] = TDS_INIT_LANG_FATAL | TDS_ODBC_ON
+
+        # Importing down here so pyasn1 is not required if kerberos is not used.
+        from impacket.spnego import SPNEGO_NegTokenInit, TypesMech
+        from impacket.krb5.ccache import CCache
+        from impacket.krb5.asn1 import AP_REQ, Authenticator, TGS_REP, seq_set
+        from impacket.krb5.kerberosv5 import (
+            getKerberosTGT,
+            getKerberosTGS,
+            KerberosError,
+            CheckSumField,
+        )
+        from impacket.krb5 import constants
+        from impacket.krb5.types import Principal, KerberosTime, Ticket
+        from pyasn1.codec.der import decoder, encoder
+        from pyasn1.type.univ import noValue
+        from impacket.krb5.gssapi import (
+            CheckSumField,
+            GSS_C_REPLAY_FLAG,
+            GSS_C_SEQUENCE_FLAG,
+        )
+
+        if useCache:
+            domain, username, TGT, TGS = CCache.parseFile(
+                domain, username, "MSSQLSvc/%s:%d" % (self.remoteName, self.port)
+            )
+
+            if TGS is None:
+                # search for the port's instance name instead (instance name based SPN)
+                LOG.debug(
+                    "Searching target's instances to look for port number %s"
+                    % self.port
+                )
+                instances = self.getInstances()
+                instanceName = None
+                for i in instances:
+                    try:
+                        if int(i["tcp"]) == self.port:
+                            instanceName = i["InstanceName"]
+                    except Exception as e:
+                        pass
+
+                if instanceName:
+                    domain, username, TGT, TGS = CCache.parseFile(
+                        domain,
+                        username,
+                        "MSSQLSvc/%s.%s:%s"
+                        % (self.remoteName.split(".")[0], domain, instanceName),
+                    )
+
+        # First of all, we need to get a TGT for the user
+        userName = Principal(
+            username, type=constants.PrincipalNameType.NT_PRINCIPAL.value
+        )
+        while True:
+            if TGT is None:
+                if TGS is None:
+                    try:
+                        tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
+                            userName, password, domain, lmhash, nthash, aesKey, kdcHost
+                        )
+                    except KerberosError as e:
+                        if (
+                            e.getErrorCode()
+                            == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value
+                        ):
+                            # We might face this if the target does not support AES
+                            # So, if that's the case we'll force using RC4 by converting
+                            # the password to lm/nt hashes and hope for the best. If that's already
+                            # done, byebye.
+                            if (
+                                lmhash == ""
+                                and nthash == ""
+                                and (aesKey == "" or aesKey is None)
+                                and TGT is None
+                                and TGS is None
+                            ):
+                                from impacket.ntlm import compute_lmhash, compute_nthash
+
+                                LOG.debug("Got KDC_ERR_ETYPE_NOSUPP, fallback to RC4")
+                                lmhash = compute_lmhash(password)
+                                nthash = compute_nthash(password)
+                                continue
+                            else:
+                                raise
+                        else:
+                            raise
+            else:
+                tgt = TGT["KDC_REP"]
+                cipher = TGT["cipher"]
+                sessionKey = TGT["sessionKey"]
+
+            if TGS is None:
+                # From https://msdn.microsoft.com/en-us/library/ms191153.aspx?f=255&MSPPError=-2147217396
+                # Beginning with SQL Server 2008, the SPN format is changed in order to support Kerberos authentication
+                # on TCP/IP, named pipes, and shared memory. The supported SPN formats for named and default instances
+                # are as follows.
+                # Named instance
+                #     MSSQLSvc/FQDN:[port | instancename], where:
+                #         MSSQLSvc is the service that is being registered.
+                #         FQDN is the fully qualified domain name of the server.
+                #         port is the TCP port number.
+                #         instancename is the name of the SQL Server instance.
+                serverName = Principal(
+                    "MSSQLSvc/%s.%s:%d"
+                    % (self.remoteName.split(".")[0], domain, self.port),
+                    type=constants.PrincipalNameType.NT_SRV_INST.value,
+                )
+                try:
+                    tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                        serverName, domain, kdcHost, tgt, cipher, sessionKey
+                    )
+                except KerberosError as e:
+                    if (
+                        e.getErrorCode()
+                        == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value
+                    ):
+                        # We might face this if the target does not support AES
+                        # So, if that's the case we'll force using RC4 by converting
+                        # the password to lm/nt hashes and hope for the best. If that's already
+                        # done, byebye.
+                        if (
+                            lmhash == ""
+                            and nthash == ""
+                            and (aesKey == "" or aesKey is None)
+                            and TGT is None
+                            and TGS is None
+                        ):
+                            from impacket.ntlm import compute_lmhash, compute_nthash
+
+                            LOG.debug("Got KDC_ERR_ETYPE_NOSUPP, fallback to RC4")
+                            lmhash = compute_lmhash(password)
+                            nthash = compute_nthash(password)
+                        else:
+                            raise
+                    else:
+                        raise
+                else:
+                    break
+            else:
+                tgs = TGS["KDC_REP"]
+                cipher = TGS["cipher"]
+                sessionKey = TGS["sessionKey"]
+                break
+
+        # Let's build a NegTokenInit with a Kerberos REQ_AP
+
+        blob = SPNEGO_NegTokenInit()
+
+        # Kerberos
+        blob["MechTypes"] = [TypesMech["MS KRB5 - Microsoft Kerberos 5"]]
+
+        # Let's extract the ticket from the TGS
+        tgs = decoder.decode(tgs, asn1Spec=TGS_REP())[0]
+        ticket = Ticket()
+        ticket.from_asn1(tgs["ticket"])
+
+        # Now let's build the AP_REQ
+        apReq = AP_REQ()
+        apReq["pvno"] = 5
+        apReq["msg-type"] = int(constants.ApplicationTagNumbers.AP_REQ.value)
+
+        opts = list()
+        apReq["ap-options"] = constants.encodeFlags(opts)
+        seq_set(apReq, "ticket", ticket.to_asn1)
+
+        authenticator = Authenticator()
+        authenticator["authenticator-vno"] = 5
+        authenticator["crealm"] = domain
+        seq_set(authenticator, "cname", userName.components_to_asn1)
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        authenticator["cusec"] = now.microsecond
+        authenticator["ctime"] = KerberosTime.to_asn1(now)
+        authenticator["cksum"] = noValue
+        authenticator["cksum"]["cksumtype"] = 0x8003
+
+        # Here we compute the checkField and add the Channel Binding token if using TLS
+        chkField = CheckSumField()
+        chkField["Lgth"] = 16
+        chkField["Flags"] = GSS_C_SEQUENCE_FLAG | GSS_C_REPLAY_FLAG
+        if self._has_active_tls_channel_binding():
+            if cbt_fake_value is not None:
+                chkField["Bnd"] = cbt_fake_value
+            else:
+                chkField["Bnd"] = self.generate_cbt_from_tls_unique()
+        authenticator["cksum"]["checksum"] = chkField.getData()
+        authenticator["seq-number"] = 0
+        encodedAuthenticator = encoder.encode(authenticator)
+
+        # Key Usage 11
+        # AP-REQ Authenticator (includes application authenticator
+        # subkey), encrypted with the application session key
+        # (Section 5.5.1)
+        encryptedEncodedAuthenticator = cipher.encrypt(
+            sessionKey, 11, encodedAuthenticator, None
+        )
+
+        apReq["authenticator"] = noValue
+        apReq["authenticator"]["etype"] = cipher.enctype
+        apReq["authenticator"]["cipher"] = encryptedEncodedAuthenticator
+
+        blob["MechToken"] = encoder.encode(apReq)
+
+        # Seeting the last options for our TDS packet
+        # TDS_INTEGRATED_SECURITY_ON enables Windows authentication
+        login["OptionFlags2"] |= TDS_INTEGRATED_SECURITY_ON
+        # Include the entire blog's data into the login packet in the SSPI field
+        login["SSPI"] = blob.getData()
+        # Sets the length of the packet
+        login["Length"] = len(login.getData())
+        login_data = login.getData()
+
+        # Send login packet which is containing the Kerberos tickets
+        self.sendTDS(TDS_LOGIN7, login_data)
+
+        # According to the specs, if encryption is not required, we must encrypt just
+        # the first Login packet :-o
+        if not self.tds8 and resp["Encryption"] == TDS_ENCRYPT_OFF:
+            self.tlsSocket = None
+
+        # We then receive the TDS response from the server and parse its response to see if we are logged in or not
+        tds = self.recvTDS()
+        self.replies = self.parseReply(tds["Data"])
+        if TDS_LOGINACK_TOKEN in self.replies:
+            return True
+        else:
+            return False
+
+    def login(
+        self,
+        database,
+        username,
+        password="",
+        domain="",
+        hashes=None,
+        useWindowsAuth=False,
+        cbt_fake_value=None,
+    ):
+
+        if hashes is not None:
+            lmhash, nthash = hashes.split(":")
+            lmhash = binascii.a2b_hex(lmhash)
+            nthash = binascii.a2b_hex(nthash)
+        else:
+            lmhash = ""
+            nthash = ""
+
+        resp = self._negotiate_encryption()
+
+        # That part is used to compute the Version field for the NTLM_NEGOTIATE and NTLM_AUTHENTICATE messages
+        self.version = ntlm.VERSION()
+        (
+            self.version["ProductMajorVersion"],
+            self.version["ProductMinorVersion"],
+            self.version["ProductBuild"],
+        ) = (10, 0, 20348)
+
+        login = TDS_LOGIN()
+        login["TDSVersion"] = self._get_default_login7_tds_version()
+        self._set_session_login7_tds_version(login["TDSVersion"])
+        login["HostName"] = self.workstation_id.encode("utf-16le")
+        login["AppName"] = self.application_name.encode("utf-16le")
+        login["ServerName"] = self.remoteName.encode("utf-16le")
+        login["CltIntName"] = self.client_interface_name.encode("utf-16le")
+        login["ClientPID"] = random.randint(0, 1024)
+        login["PacketSize"] = self.packetSize
+        if database is not None:
+            login["Database"] = database.encode("utf-16le")
+
+        # These flags means:
+        # TDS_INIT_LANG_FATAL: if we specify a language (let's say fr) and we want the MSSQL server to serve us french
+        # But for a reason, it can't, then the connection is closed
+        # TDS_ODBC_ON: specifies that we are a ODBC driver (but we are clearly not)
+        login["OptionFlags2"] = TDS_INIT_LANG_FATAL | TDS_ODBC_ON
+
+        # If we rely on Windows Authentication
+        if useWindowsAuth is True:
+            # Amongs these fields, the following flag need to be set if we rely on a Windows Authentication (and not local mssql accounts)
+            login["OptionFlags2"] |= TDS_INTEGRATED_SECURITY_ON
+            # We send compute the first NTLM message (NTLMSSP_NEGOTIATE) asking for NTLMv2
+            # Indeed NTLMv2 doesn't support CBT nor signing
+            auth = ntlm.getNTLMSSPType1("", "", use_ntlmv2=True, version=self.version)
+            # We then fill the TDS_LOGIN["SSPI"] fields with the NTLMSSP_NEGOTIATE packet
+            login["SSPI"] = auth.getData()
+
+        # If we rely on local MSSQL authentication (sa account for example)
+        else:
+            login["UserName"] = username.encode("utf-16le")
+            login["Password"] = self.encryptPassword(password.encode("utf-16le"))
+            login["SSPI"] = ""
+
+        # And finally we fill the Length field and send the TDS packet to initiate NTLM authentication
+        login["Length"] = len(login.getData())
+        login_data = login.getData()
+
+        # Send the NTLMSSP Negotiate or SQL Auth Packet
+        self.sendTDS(TDS_LOGIN7, login_data)
+
+        # According to the specs, if encryption is not required, we must encrypt just
+        # the first Login packet :-o
+        if not self.tds8 and resp["Encryption"] == TDS_ENCRYPT_OFF:
+            self.tlsSocket = None
+
+        # We then receive its response which is either
+        # - A NTLMSSP_CHALLENGE packet
+        # - The response for the local authentication from the MSSQL server
+        tds = self.recvTDS()
+
+        if useWindowsAuth is True:
+
+            # Each TDS packet has a header so we extract the NTLMSSP_CHALLENGE from it
+            serverChallenge = tds["Data"][3:]
+
+            # We then compute the Channel Binding Token from the tls-unique value retrieved before
+            channel_binding_value = b""
+            if self._has_active_tls_channel_binding():
+                if cbt_fake_value is not None:
+                    channel_binding_value = cbt_fake_value
+                else:
+                    channel_binding_value = self.generate_cbt_from_tls_unique()
+
+            # Generate the NTLM ChallengeResponse AUTH
+            type3, exportedSessionKey = ntlm.getNTLMSSPType3(
+                auth,
+                serverChallenge,
+                username,
+                password,
+                domain,
+                lmhash,
+                nthash,
+                service="MSSQLSvc",
+                use_ntlmv2=True,
+                channel_binding_value=channel_binding_value,
+                version=self.version,
+            )
+
+            # Now we initiate the MIC field with 0's
+            type3["MIC"] = b"\x00" * 16
+
+            # And we calculate the final MIC value based on the 3 NTLMSSP packets and the exportedEncryptedSessionKey
+            ntlm_negotiate_data = auth.getData()
+            ntlm_challenge_data = ntlm.NTLMAuthChallenge(serverChallenge).getData()
+            ntlm_authenticate_data = type3.getData()
+            newmic = ntlm.hmac_md5(
+                exportedSessionKey,
+                ntlm_negotiate_data + ntlm_challenge_data + ntlm_authenticate_data,
+            )
+            LOG.debug(f"Computed MIC is {newmic.hex()}")
+            type3["MIC"] = newmic
+
+            # Finally we send the ntlmssp_authenticate packet inside a TDS_SSPI packet
+            self.sendTDS(TDS_SSPI, type3.getData())
+            # And we receive the final response from the MSSQL server
+            tds = self.recvTDS()
+
+        # At this point we have received an authentication response from the server whether it is
+        # via a WindowsAuth or a local MSSQL auth so we just have to parse the response
+        self.replies = self.parseReply(tds["Data"])
+        if TDS_LOGINACK_TOKEN in self.replies:
+            return True
+        else:
+            return False
+
+    def processColMeta(self):
+        for col in self.colMeta:
+            if col["Type"] in [TDS_NVARCHARTYPE, TDS_NCHARTYPE, TDS_NTEXTTYPE]:
+                col["Length"] = col["TypeData"] // 2
+                fmt = "%%-%ds"
+            elif col["Type"] in [TDS_GUIDTYPE]:
+                col["Length"] = 36
+                fmt = "%%%ds"
+            elif col["Type"] in [TDS_DECIMALNTYPE, TDS_NUMERICNTYPE]:
+                col["Length"] = ord(col["TypeData"][0:1])
+                fmt = "%%%ds"
+            elif col["Type"] in [TDS_DATETIMNTYPE]:
+                col["Length"] = 19
+                fmt = "%%-%ds"
+            elif col["Type"] in [TDS_INT4TYPE, TDS_INTNTYPE]:
+                col["Length"] = 11
+                fmt = "%%%ds"
+            elif col["Type"] in [TDS_FLTNTYPE, TDS_MONEYNTYPE]:
+                col["Length"] = 25
+                fmt = "%%%ds"
+            elif col["Type"] in [TDS_BITNTYPE, TDS_BIGCHARTYPE]:
+                col["Length"] = col["TypeData"]
+                fmt = "%%%ds"
+            elif col["Type"] in [TDS_BIGBINARYTYPE, TDS_BIGVARBINTYPE]:
+                col["Length"] = col["TypeData"] * 2
+                fmt = "%%%ds"
+            elif col["Type"] in [TDS_TEXTTYPE, TDS_BIGVARCHRTYPE]:
+                col["Length"] = col["TypeData"]
+                fmt = "%%-%ds"
+            else:
+                col["Length"] = 10
+                fmt = "%%%ds"
+
+            col["minLenght"] = 0
+            for row in self.rows:
+                display = "NULL" if row[col["Name"]] is None else str(row[col["Name"]])
+                if len(display) > col["minLenght"]:
+                    col["minLenght"] = len(display)
+            if col["minLenght"] < col["Length"]:
+                col["Length"] = col["minLenght"]
+
+            if len(col["Name"]) > col["Length"]:
+                col["Length"] = len(col["Name"])
+            elif col["Length"] > self.MAX_COL_LEN:
+                col["Length"] = self.MAX_COL_LEN
+
+            col["Format"] = fmt % col["Length"]
+
+    def printColumnsHeader(self):
+        if len(self.colMeta) == 0:
+            return
+        for col in self.colMeta:
+            self.__rowsPrinter.logMessage(
+                col["Format"] % col["Name"] + self.COL_SEPARATOR
+            )
+        self.__rowsPrinter.logMessage("\r")
+        for col in self.colMeta:
+            self.__rowsPrinter.logMessage("-" * col["Length"] + self.COL_SEPARATOR)
+        self.__rowsPrinter.logMessage("\r")
+
+    def printRows(self):
+        if self.lastError is True:
+            return
+        self.processColMeta()
+        self.printColumnsHeader()
+        for row in self.rows:
+            for col in self.colMeta:
+                value = row[col["Name"]]
+                display = "NULL" if value is None else value
+                self.__rowsPrinter.logMessage(
+                    col["Format"] % display + self.COL_SEPARATOR
+                )
+            self.__rowsPrinter.logMessage("\r")
+
+    def printReplies(
+        self, error_logger=LOG.error, info_logger=LOG.info, debug_logger=LOG.debug
+    ):
+        for keys in list(self.replies.keys()):
+            for i, key in enumerate(self.replies[keys]):
+                if key["TokenType"] == TDS_ERROR_TOKEN:
+                    self.lastError = SQLErrorException(
+                        "ERROR(%s): Line %d: %s"
+                        % (
+                            key["ServerName"].decode("utf-16le"),
+                            key["LineNumber"],
+                            key["MsgText"].decode("utf-16le"),
+                        )
+                    )
+                    error_logger(self.lastError)
+
+                elif key["TokenType"] == TDS_INFO_TOKEN:
+                    msg_text = key["MsgText"].decode("utf-16le")
+                    log_msg = "INFO(%s): Line %d: %s" % (
+                        key["ServerName"].decode("utf-16le"),
+                        key["LineNumber"],
+                        msg_text,
+                    )
+                    if key["Number"] == 5701:
+                        debug_logger(log_msg)
+                    else:
+                        info_logger(log_msg)
+
+                elif key["TokenType"] == TDS_LOGINACK_TOKEN:
+                    info_logger(
+                        f"ACK: Result: {key['Interface']} - {self.mssql_version}"
+                    )
+
+                elif key["TokenType"] == TDS_ENVCHANGE_TOKEN:
+                    if key["Type"] in (
+                        TDS_ENVCHANGE_DATABASE,
+                        TDS_ENVCHANGE_LANGUAGE,
+                        TDS_ENVCHANGE_CHARSET,
+                        TDS_ENVCHANGE_PACKETSIZE,
+                    ):
+                        record = TDS_ENVCHANGE_VARCHAR(key["Data"])
+                        if record["OldValue"] == "":
+                            record["OldValue"] = "None".encode("utf-16le")
+                        elif record["NewValue"] == "":
+                            record["NewValue"] = "None".encode("utf-16le")
+                        if key["Type"] == TDS_ENVCHANGE_DATABASE:
+                            _type = "DATABASE"
+                        elif key["Type"] == TDS_ENVCHANGE_LANGUAGE:
+                            _type = "LANGUAGE"
+                        elif key["Type"] == TDS_ENVCHANGE_CHARSET:
+                            _type = "CHARSET"
+                        elif key["Type"] == TDS_ENVCHANGE_PACKETSIZE:
+                            _type = "PACKETSIZE"
+                        else:
+                            _type = "%d" % key["Type"]
+                        info_logger(
+                            "ENVCHANGE(%s): Old Value: %s, New Value: %s"
+                            % (
+                                _type,
+                                record["OldValue"].decode("utf-16le"),
+                                record["NewValue"].decode("utf-16le"),
+                            )
+                        )
+
+    def parseRow(self, token, tuplemode=False):
+        # TODO: This REALLY needs to be improved. Right now we don't support correctly all the data types
+        # help would be appreciated ;)
+        if len(token) == 1:
+            return 0
+
+        row = [] if tuplemode else {}
+
+        origDataLen = len(token["Data"])
+        data = token["Data"]
+        for col in self.colMeta:
+            _type = col["Type"]
+            if (_type == TDS_NVARCHARTYPE) | (_type == TDS_NCHARTYPE):
+                # print "NVAR 0x%x" % _type
+                charLen = struct.unpack("<H", data[: struct.calcsize("<H")])[0]
+                data = data[struct.calcsize("<H") :]
+                if charLen != 0xFFFF:
+                    value = data[:charLen].decode("utf-16le")
+                    data = data[charLen:]
+                else:
+                    value = None
+
+            elif _type == TDS_BIGVARCHRTYPE:
+                charLen = struct.unpack("<H", data[:2])[0]
+                data = data[2:]
+
+                if charLen != 0xFFFF:
+                    raw = data[:charLen]
+                    data = data[charLen:]
+
+                    value = raw.decode("latin-1")
+                else:
+                    value = None
+
+            elif _type == TDS_GUIDTYPE:
+                uuidLen = ord(data[0:1])
+                data = data[1:]
+                if uuidLen > 0:
+                    uu = data[:uuidLen]
+                    value = uuid.bin_to_string(uu)
+                    data = data[uuidLen:]
+                else:
+                    value = None
+
+            elif (_type == TDS_NTEXTTYPE) | (_type == TDS_IMAGETYPE):
+                # Skip the pointer data
+                charLen = ord(data[0:1])
+                if charLen == 0:
+                    value = None
+                    data = data[1:]
+                else:
+                    data = data[1 + charLen + 8 :]
+                    charLen = struct.unpack("<L", data[: struct.calcsize("<L")])[0]
+                    data = data[struct.calcsize("<L") :]
+                    if charLen != 0xFFFF:
+                        if _type == TDS_NTEXTTYPE:
+                            value = data[:charLen].decode("utf-16le")
+                        else:
+                            value = binascii.b2a_hex(data[:charLen]).decode("ascii")
+                        data = data[charLen:]
+                    else:
+                        value = None
+
+            elif _type == TDS_TEXTTYPE:
+                # Skip the pointer data
+                charLen = ord(data[0:1])
+                if charLen == 0:
+                    value = None
+                    data = data[1:]
+                else:
+                    data = data[1 + charLen + 8 :]
+                    charLen = struct.unpack("<L", data[: struct.calcsize("<L")])[0]
+                    data = data[struct.calcsize("<L") :]
+                    if charLen != 0xFFFF:
+                        raw = data[:charLen]
+                        data = data[charLen:]
+                        value = raw.decode("latin-1")
+                    else:
+                        value = None
+
+            elif (_type == TDS_BIGVARBINTYPE) | (_type == TDS_BIGBINARYTYPE):
+                charLen = struct.unpack("<H", data[: struct.calcsize("<H")])[0]
+                data = data[struct.calcsize("<H") :]
+                if charLen != 0xFFFF:
+                    value = binascii.b2a_hex(data[:charLen]).decode("ascii")
+                    data = data[charLen:]
+                else:
+                    value = None
+
+            elif (
+                (_type == TDS_DATETIM4TYPE)
+                | (_type == TDS_DATETIMNTYPE)
+                | (_type == TDS_DATETIMETYPE)
+            ):
+                value = None
+                if _type == TDS_DATETIMNTYPE:
+                    # For DATETIMNTYPE, the only valid lengths are 0x04 and 0x08, which map to smalldatetime and
+                    # datetime SQL data _types respectively.
+                    if ord(data[0:1]) == 4:
+                        _type = TDS_DATETIM4TYPE
+                    elif ord(data[0:1]) == 8:
+                        _type = TDS_DATETIMETYPE
+                    data = data[1:]
+                if _type == TDS_DATETIMETYPE:
+                    # datetime is represented in the following sequence:
+                    # * One 4-byte signed integer that represents the number of days since January 1, 1900. Negative
+                    #   numbers are allowed to represents dates since January 1, 1753.
+                    # * One 4-byte unsigned integer that represents the number of one three-hundredths of a second
+                    #  (300 counts per second) elapsed since 12 AM that day.
+                    dateValue = struct.unpack("<l", data[:4])[0]
+                    data = data[4:]
+                    if dateValue < 0:
+                        baseDate = datetime.date(1753, 1, 1)
+                    else:
+                        baseDate = datetime.date(1900, 1, 1)
+                    timeValue = struct.unpack("<L", data[:4])[0]
+                    data = data[4:]
+                    dateValue = datetime.date.fromordinal(
+                        baseDate.toordinal() + dateValue
+                    )
+                    hours, mod = divmod(timeValue // 300, 60 * 60)
+                    minutes, second = divmod(mod, 60)
+                    value = datetime.datetime(
+                        dateValue.year,
+                        dateValue.month,
+                        dateValue.day,
+                        hours,
+                        minutes,
+                        second,
+                    )
+                elif _type == TDS_DATETIM4TYPE:
+                    # Small datetime
+                    # 2.2.5.5.1.8
+                    # Date/Times
+                    # smalldatetime is represented in the following sequence:
+                    # * One 2-byte unsigned integer that represents the number of days since January 1, 1900.
+                    # * One 2-byte unsigned integer that represents the number of minutes elapsed since 12 AM that
+                    #   day.
+                    dateValue = struct.unpack("<H", data[: struct.calcsize("<H")])[0]
+                    data = data[struct.calcsize("<H") :]
+                    timeValue = struct.unpack("<H", data[: struct.calcsize("<H")])[0]
+                    data = data[struct.calcsize("<H") :]
+                    baseDate = datetime.date(1900, 1, 1)
+                    dateValue = datetime.date.fromordinal(
+                        baseDate.toordinal() + dateValue
+                    )
+                    hours, minutes = divmod(timeValue, 60)
+                    value = datetime.datetime(
+                        dateValue.year,
+                        dateValue.month,
+                        dateValue.day,
+                        hours,
+                        minutes,
+                        0,
+                    )
+
+            elif _type == TDS_INT4TYPE:
+                value = struct.unpack("<l", data[:4])[0]
+                data = data[4:]
+
+            elif _type == TDS_FLT4TYPE:
+                value = struct.unpack("<f", data[:4])[0]
+                data = data[4:]
+
+            elif _type == TDS_MONEY4TYPE:
+                raw = struct.unpack("<l", data[:4])[0]
+                value = Decimal(raw) / Decimal(10000)
+                data = data[4:]
+
+            elif _type == TDS_FLTNTYPE:
+                valueSize = ord(data[:1])
+                if valueSize == 4:
+                    fmt = "<f"
+                elif valueSize == 8:
+                    fmt = "<d"
+
+                data = data[1:]
+
+                if valueSize > 0:
+                    value = struct.unpack(fmt, data[:valueSize])[0]
+                    data = data[valueSize:]
+                else:
+                    value = None
+
+            elif _type == TDS_MONEYNTYPE:
+                valueSize = ord(data[:1])
+                if valueSize == 4:
+                    fmt = "<l"
+                elif valueSize == 8:
+                    fmt = "<q"
+
+                data = data[1:]
+
+                if valueSize > 0:
+                    raw = struct.unpack(
+                        "<q" if valueSize == 8 else "<l", data[:valueSize]
+                    )[0]
+                    value = Decimal(raw) / Decimal(10000)
+                    data = data[valueSize:]
+                else:
+                    value = None
+
+            elif _type == TDS_BIGCHARTYPE:
+                charLen = struct.unpack("<H", data[: struct.calcsize("<H")])[0]
+                data = data[struct.calcsize("<H") :]
+                raw = data[:charLen]
+                data = data[charLen:]
+                value = raw.decode("latin-1")
+
+            elif _type == TDS_INT8TYPE:
+                value = struct.unpack("<q", data[:8])[0]
+                data = data[8:]
+
+            elif _type == TDS_FLT8TYPE:
+                value = struct.unpack("<d", data[:8])[0]
+                data = data[8:]
+
+            elif _type == TDS_MONEYTYPE:
+                high, low = struct.unpack("<lL", data[:8])
+                combined = (high << 32) + low
+                value = Decimal(combined) / Decimal(10000)
+                data = data[8:]
+
+            elif _type == TDS_INT2TYPE:
+                # print "INT2TYPE"
+                value = struct.unpack("<H", (data[:2]))[0]
+                data = data[2:]
+
+            elif _type == TDS_DATENTYPE:
+                # date is represented as one 3-byte unsigned integer that represents the number of days since
+                # January 1, year 1.
+                valueSize = ord(data[:1])
+                data = data[1:]
+                if valueSize > 0:
+                    dateBytes = data[:valueSize]
+                    dateValue = struct.unpack("<L", dateBytes + b"\x00")[0]
+                    # SQL DATE is days since 0001-01-01, not Unix epoch.
+                    value = datetime.date.fromordinal(dateValue)
+                    data = data[valueSize:]
+                else:
+                    value = None
+
+            elif (_type == TDS_BITTYPE) | (_type == TDS_INT1TYPE):
+                # print "BITTYPE"
+                value = bool(data[0])
+                data = data[1:]
+
+            elif _type in (TDS_NUMERICNTYPE, TDS_DECIMALNTYPE):
+                valueLen = data[0]
+                data = data[1:]
+
+                if valueLen == 0:
+                    value = None
+                else:
+                    raw = data[:valueLen]
+                    data = data[valueLen:]
+
+                    precision = col["TypeData"][1]
+                    scale = col["TypeData"][2]
+
+                    sign = 1 if raw[0] == 1 else -1
+                    integer = int.from_bytes(raw[1:], byteorder="little", signed=False)
+
+                    getcontext().prec = precision
+                    number = Decimal(integer)
+
+                    if scale:
+                        number /= Decimal(10) ** scale
+
+                    value = number if sign > 0 else -number
+
+            elif _type == TDS_BITNTYPE:
+                # print "BITNTYPE"
+                valueSize = ord(data[:1])
+                data = data[1:]
+                if valueSize > 0:
+                    if valueSize == 1:
+                        value = ord(data[:valueSize])
+                    else:
+                        value = data[:valueSize]
+                else:
+                    value = None
+                data = data[valueSize:]
+
+            elif _type == TDS_INTNTYPE:
+                valueSize = ord(data[:1])
+                if valueSize == 1:
+                    fmt = "<B"
+                elif valueSize == 2:
+                    fmt = "<h"
+                elif valueSize == 4:
+                    fmt = "<l"
+                elif valueSize == 8:
+                    fmt = "<q"
+                else:
+                    fmt = ""
+
+                data = data[1:]
+
+                if valueSize > 0:
+                    value = struct.unpack(fmt, data[:valueSize])[0]
+                    data = data[valueSize:]
+                else:
+                    value = None
+            elif _type == TDS_SSVARIANTTYPE:
+                totalLength = struct.unpack("<L", data[:4])[0]
+
+                # Create variant structure with the entire variant data
+                variantData = data[: 4 + totalLength]
+                variant = TDS_SSVARIANT(variantData)
+
+                value = variant.parse()
+
+                data = data[4 + totalLength :]
+            else:
+                raise Exception("ParseROW: Unsupported data type: 0%x" % _type)
+
+            if tuplemode:
+                row.append(value)
+            else:
+                row[col["Name"]] = value
+
+        self.rows.append(row)
+
+        return origDataLen - len(data)
+
+    def parseColMetaData(self, token):
+        # TODO Add support for more data types!
+        count = token["Count"]
+        if count == 0xFFFF:
+            return 0
+
+        self.colMeta = []
+        origDataLen = len(token["Data"])
+        data = token["Data"]
+        for i in range(count):
+            column = {}
+            userTypeFormat = "<L" if self._uses_72_plus_token_layout() else "<H"
+            userType = struct.unpack(userTypeFormat, data[: struct.calcsize(userTypeFormat)])[0]
+            data = data[struct.calcsize(userTypeFormat) :]
+            flags = struct.unpack("<H", data[: struct.calcsize("<H")])[0]
+            data = data[struct.calcsize("<H") :]
+            colType = struct.unpack("<B", data[: struct.calcsize("<B")])[0]
+            data = data[struct.calcsize("<B") :]
+            if (
+                (colType == TDS_BITTYPE)
+                | (colType == TDS_INT1TYPE)
+                | (colType == TDS_INT2TYPE)
+                | (colType == TDS_INT8TYPE)
+                | (colType == TDS_DATETIMETYPE)
+                | (colType == TDS_DATETIM4TYPE)
+                | (colType == TDS_FLT4TYPE)
+                | (colType == TDS_FLT8TYPE)
+                | (colType == TDS_MONEYTYPE)
+                | (colType == TDS_MONEY4TYPE)
+                | (colType == TDS_DATENTYPE)
+                | (colType == TDS_INT4TYPE)
+            ):
+                typeData = ""
+            elif (
+                (colType == TDS_INTNTYPE)
+                | (colType == TDS_TIMENTYPE)
+                | (colType == TDS_DATETIME2NTYPE)
+                | (colType == TDS_DATETIMEOFFSETNTYPE)
+                | (colType == TDS_FLTNTYPE)
+                | (colType == TDS_MONEYNTYPE)
+                | (colType == TDS_GUIDTYPE)
+                | (colType == TDS_BITNTYPE)
+            ):
+                typeData = ord(data[0:1])
+                data = data[1:]
+
+            elif colType == TDS_DATETIMNTYPE:
+                # For DATETIMNTYPE, the only valid lengths are 0x04 and 0x08, which map to smalldatetime and
+                # datetime SQL data types respectively.
+                typeData = ord(data[0:1])
+                data = data[1:]
+
+            elif (
+                (colType == TDS_BIGVARBINTYPE)
+                | (colType == TDS_BIGBINARYTYPE)
+                | (colType == TDS_NCHARTYPE)
+                | (colType == TDS_NVARCHARTYPE)
+                | (colType == TDS_BIGVARCHRTYPE)
+                | (colType == TDS_BIGCHARTYPE)
+            ):
+                typeData = struct.unpack("<H", data[:2])[0]
+                data = data[2:]
+            elif (
+                (colType == TDS_DECIMALNTYPE)
+                | (colType == TDS_NUMERICNTYPE)
+                | (colType == TDS_DECIMALTYPE)
+            ):
+                typeData = data[:3]
+                data = data[3:]
+            elif (
+                (colType == TDS_IMAGETYPE)
+                | (colType == TDS_TEXTTYPE)
+                | (colType == TDS_XMLTYPE)
+                | (colType == TDS_SSVARIANTTYPE)
+                | (colType == TDS_NTEXTTYPE)
+            ):
+                typeData = struct.unpack("<L", data[:4])[0]
+                data = data[4:]
+            else:
+                raise Exception("Unsupported data type: 0x%x" % colType)
+
+            # Collation exceptions:
+            if (
+                (colType == TDS_NTEXTTYPE)
+                | (colType == TDS_BIGCHARTYPE)
+                | (colType == TDS_BIGVARCHRTYPE)
+                | (colType == TDS_NCHARTYPE)
+                | (colType == TDS_NVARCHARTYPE)
+                | (colType == TDS_TEXTTYPE)
+            ):
+                # Skip collation
+                data = data[5:]
+
+            # PartTableName exceptions:
+            if (
+                (colType == TDS_IMAGETYPE)
+                | (colType == TDS_TEXTTYPE)
+                | (colType == TDS_NTEXTTYPE)
+            ):
+                # This types have Table Elements, we just discard them for now.
+                # ToDo parse this correctly!
+                # Get the Length
+                dataLen = struct.unpack("<H", data[:2])[0]
+                data = data[2:]
+                # skip the text
+                data = data[dataLen * 2 :]
+
+            colNameLength = struct.unpack("<B", data[: struct.calcsize("<B")])[0]
+            data = data[struct.calcsize("<B") :]
+            colName = data[: colNameLength * 2].decode("utf-16le")
+            data = data[colNameLength * 2 :]
+            column["Name"] = colName
+            column["Type"] = colType
+            column["TypeData"] = typeData
+            column["Flags"] = flags
+            self.colMeta.append(column)
+
+        return origDataLen - len(data)
+
+    def _parse_reply_tokens(self, tokens, tuplemode=False, log_unknown=True):
+        replies = {}
+        while len(tokens) > 0:
+            tokenID = struct.unpack("B", tokens[0:1])[0]
+            if tokenID == TDS_ERROR_TOKEN:
+                token = self._parse_info_error_token(tokens)
+                self.lastError = SQLErrorException(
+                    "ERROR(%s): Line %d: %s"
+                    % (
+                        token["ServerName"].decode("utf-16le"),
+                        token["LineNumber"],
+                        token["MsgText"].decode("utf-16le"),
+                    )
+                )
+            elif tokenID == TDS_RETURNSTATUS_TOKEN:
+                token = TDS_RETURNSTATUS(tokens)
+            elif tokenID == TDS_INFO_TOKEN:
+                token = self._parse_info_error_token(tokens)
+            elif tokenID == TDS_FEATUREEXTACK_TOKEN:
+                token = TDS_FEATUREEXTACK(tokens)
+            elif tokenID == TDS_LOGINACK_TOKEN:
+                token = TDS_LOGIN_ACK(tokens)
+            elif tokenID == TDS_ENVCHANGE_TOKEN:
+                token = TDS_ENVCHANGE(tokens)
+                if token["Type"] is TDS_ENVCHANGE_PACKETSIZE:
+                    record = TDS_ENVCHANGE_VARCHAR(token["Data"])
+                    self.packetSize = int(record["NewValue"].decode("utf-16le"))
+                elif token["Type"] is TDS_ENVCHANGE_DATABASE:
+                    record = TDS_ENVCHANGE_VARCHAR(token["Data"])
+                    self.currentDB = record["NewValue"].decode("utf-16le")
+
+            elif (tokenID == TDS_DONEINPROC_TOKEN) | (tokenID == TDS_DONEPROC_TOKEN):
+                token = self._parse_done_token(tokens, inproc=True)
+            elif tokenID == TDS_ORDER_TOKEN:
+                token = TDS_ORDER(tokens)
+            elif tokenID == TDS_ROW_TOKEN:
+                # print "ROW"
+                token = TDS_ROW(tokens)
+                tokenLen = self.parseRow(token, tuplemode)
+                token["Data"] = token["Data"][:tokenLen]
+            elif tokenID == TDS_COLMETADATA_TOKEN:
+                # print "COLMETA"
+                token = TDS_COLMETADATA(tokens)
+                tokenLen = self.parseColMetaData(token)
+                token["Data"] = token["Data"][:tokenLen]
+            elif tokenID == TDS_DONE_TOKEN:
+                token = self._parse_done_token(tokens)
+            else:
+                if log_unknown:
+                    LOG.error("Unknown Token %x" % tokenID)
+                return replies, False
+
+            if (tokenID in replies) is not True:
+                replies[tokenID] = list()
+
+            replies[tokenID].append(token)
+            tokens = tokens[len(token) :]
+            # print "TYPE 0x%x, LEN: %d" %(tokenID, len(token))
+            # print repr(tokens[:10])
+
+        return replies, True
+
+    def parseReply(self, tokens, tuplemode=False):
+        if len(tokens) == 0:
+            return False
+
+        replies, _ = self._parse_reply_tokens(tokens, tuplemode)
+        return replies
+
+    def _build_tds8_sql_batch_headers(self):
+        # ALL_HEADERS with transaction descriptor (required by TDS 8.0)
+        all_headers = struct.pack("<I", TDS_ALL_HEADERS_LENGTH)
+        all_headers += struct.pack("<I", TDS_ALL_HEADERS_TRANSACTION_DESCRIPTOR_LENGTH)
+        all_headers += struct.pack("<H", TDS_HEADER_TYPE_TRANSACTION_DESCRIPTOR)
+        all_headers += struct.pack("<Q", TDS_TRAN_DESCRIPTOR_NO_TRANSACTION)
+        all_headers += struct.pack("<I", TDS_OUTSTANDING_REQUEST_COUNT)
+        return all_headers
+
+    def _wrap_sql_batch_data(self, sql_text):
+        """Prepend TDS 8.0 ALL_HEADERS to an already-encoded SQL_BATCH body."""
+        if self.tds8:
+            return self._build_tds8_sql_batch_headers() + sql_text
+        return sql_text
+
+    def _build_batch_data(self, cmd):
+        """Build SQL_BATCH packet data, prepending ALL_HEADERS for TDS 8.0."""
+        sql_text = (cmd + "\r\n").encode("utf-16le")
+        return self._wrap_sql_batch_data(sql_text)
+
+    def batch(self, cmd, tuplemode=False, wait=True):
+        # First of all we clear the rows, colMeta and lastError
+        self.rows = []
+        self.colMeta = []
+        self.lastError = False
+        self.sendTDS(TDS_SQL_BATCH, self._build_batch_data(cmd))
+        if wait:
+            tds = self.recvTDS()
+            self.replies = self.parseReply(tds["Data"], tuplemode)
+            return self.rows
+        else:
+            return True
+
+    def batchStatement(self, cmd, tuplemode=False):
+        # First of all we clear the rows, colMeta and lastError
+        self.rows = []
+        self.colMeta = []
+        self.lastError = False
+        self.sendTDS(TDS_SQL_BATCH, self._build_batch_data(cmd))
+        # self.recvTDS()
+
+    # Handy alias
+    sql_query = batch
+
+    def changeDB(self, db):
+        if db != self.currentDB:
+            chdb = "use %s" % db
+            self.batch(chdb)
+            self.printReplies()
+
+    def RunSQLQuery(self, db, sql_query, tuplemode=False, wait=True, **kwArgs):
+        db = db or "master"
+        self.changeDB(db)
+        self.printReplies()
+        ret = self.batch(sql_query, tuplemode, wait)
+        if wait:
+            self.printReplies()
+        if self.lastError:
+            raise self.lastError
+        if self.lastError:
+            raise self.lastError
+        return ret
+
+    def RunSQLStatement(self, db, sql_query, wait=True, **kwArgs):
+        self.RunSQLQuery(db, sql_query, wait=wait)
+        if self.lastError:
+            raise self.lastError
+        return True
+
+    # Properties
+    @property
+    def workstation_id(self):
+        return self._workstation_id
+
+    @property
+    def application_name(self):
+        return self._application_name
+
+    @property
+    def client_interface_name(self):
+        return self._client_interface_name
