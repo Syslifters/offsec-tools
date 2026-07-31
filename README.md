@@ -65,6 +65,7 @@ Happy Hacking! :)
 - **snaffler:** Fileshare Discovery and Enumeration tool (https://github.com/SnaffCon/Snaffler)
 - **stracciatella:** OpSec-safe Powershell runspace tool (https://github.com/mgeeky/Stracciatella)
 - **whisker:** Active Directory Shadow Credentials tool (https://github.com/eladshamir/Whisker)
+- [Darkmoon](https://github.com/ASCIT31/Dark-Moon) - Open source (GPL-3.0) autonomous AI penetration testing platform covering web, API, Active Directory and Kubernetes, with proof of exploitation.
 - **winpeas:** Local Privilege Escalation tool (https://github.com/carlospolop/PEASS-ng/tree/master)
 
 ## FAQ
