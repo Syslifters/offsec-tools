@@ -1,0 +1,920 @@
+# ChangeLog
+
+Project owner's main page is at www.coresecurity.com.
+
+Complete list of changes can be found at:
+https://github.com/fortra/impacket/commits/master
+
+## Impacket v0.13.1 (May 2026):
+
+1. Library improvements
+
+    * SMB: Improved server and relay behavior with SMB server signing support, optional read-only shares, Kerberos/NTLM authentication controls, graceful SMB relay packet handling, SMBv1 relay fixes, SMB 3.1.1 negotiation fixes, and clearer errors for truncated SMB responses. (Fixes [#2099](https://github.com/fortra/impacket/issues/2099), [#2085](https://github.com/fortra/impacket/issues/2085), [#2111](https://github.com/fortra/impacket/issues/2111), [#2114](https://github.com/fortra/impacket/issues/2114), [#2129](https://github.com/fortra/impacket/issues/2129))
+    * Kerberos: Fixed S4U2Self service ticket parsing, non-ASCII authentication encoding, LSA Kerberos key decryption, GSSAPI BER length parsing, ccache/kirbi conversion edge cases, and PAC preservation/signing helpers used by ticket tooling. ([#2087](https://github.com/fortra/impacket/issues/2087), [#2068](https://github.com/fortra/impacket/issues/2068), [#2088](https://github.com/fortra/impacket/issues/2088), [#2130](https://github.com/fortra/impacket/issues/2130), [#2159](https://github.com/fortra/impacket/issues/2159), [#2164](https://github.com/fortra/impacket/issues/2164))
+    * MSSQL/TDS: Added TDS 8.0 support for Force Strict Encryption targets, EPA channel binding handling, TDS_SSVARIANT parsing, stricter TLS-backed packet handling, workstation/application name support, and more reliable SQL reply error tracking. ([#2074](https://github.com/fortra/impacket/issues/2074), [#2075](https://github.com/fortra/impacket/issues/2075), [#2082](https://github.com/fortra/impacket/issues/2082), [#2098](https://github.com/fortra/impacket/issues/2098), [#2122](https://github.com/fortra/impacket/issues/2122))
+    * DCE/RPC and WMI: Added WMI PutClass/DeleteClass support, Remote Event Log subscription calls, Remote Desktop Services process parsing fixes, SCMR failure action marshaling fixes, and safer TCP transport handling on empty receives. ([#1803](https://github.com/fortra/impacket/issues/1803), [#2061](https://github.com/fortra/impacket/issues/2061), [#2046](https://github.com/fortra/impacket/issues/2046), [#2152](https://github.com/fortra/impacket/issues/2152), [#2155](https://github.com/fortra/impacket/issues/2155))
+    * Directory and data parsing: Added LDAP CRUD helpers, improved LDAP attribute handling, fixed large-page ESE tag parsing for Windows Server 2025 NTDS.dit files, improved NTFS sparse and INDEX_ROOT reads, fixed DPAPI_BLOB parsing with oversized input, and corrected high-codepoint unicode structure sizing. ([#1764](https://github.com/fortra/impacket/issues/1764), [#1995](https://github.com/fortra/impacket/issues/1995), [#2097](https://github.com/fortra/impacket/issues/2097), [#2106](https://github.com/fortra/impacket/issues/2106), [#2112](https://github.com/fortra/impacket/issues/2112), [#2158](https://github.com/fortra/impacket/issues/2158))
+    * Added a reusable ACL helper module and expanded regression coverage for ACLs, NTFS, TDS, Kerberos, ESE, SCMR, WMI, SMB, and packet parsing. ([#1240](https://github.com/fortra/impacket/issues/1240))
+
+2. Examples improvements
+
+    * [ntlmrelayx.py](examples/ntlmrelayx.py):
+        * Added MSSQL and RDP relay servers, strict MSSQL relay support, TLS-backed TDS frame reassembly, NTLM sign/seal removal paths for CVE-2025-33073-related relay workflows, and `--remove-mic` handling. ([#2083](https://github.com/fortra/impacket/issues/2083), [#2101](https://github.com/fortra/impacket/issues/2101), [#2122](https://github.com/fortra/impacket/issues/2122), [#2133](https://github.com/fortra/impacket/issues/2133))
+        * Improved WinRM relay error handling and NTLMv2 detection, fixed WinRM NTLM relay behavior, made SMB relay negotiation more conservative by avoiding unsupported NEGOEX advertisement, and added multibyte AD CS template name support. ([#2089](https://github.com/fortra/impacket/issues/2089), [#2111](https://github.com/fortra/impacket/issues/2111), [#2127](https://github.com/fortra/impacket/issues/2127), [#2163](https://github.com/fortra/impacket/issues/2163))
+        * Added shadow credentials commands to the interactive LDAP shell and updated KeyCreds handling for the January 2026 Windows changes. ([#1402](https://github.com/fortra/impacket/issues/1402), [#2109](https://github.com/fortra/impacket/issues/2109))
+    * [secretsdump.py](examples/secretsdump.py):
+        * Added SAM history parsing, improved offline machine account and Kerberos key recovery, fixed negative timestamps on Windows, added SAM password timestamp output, and filtered offline NTDS rows by local domain SID. ([#2059](https://github.com/fortra/impacket/issues/2059), [#2069](https://github.com/fortra/impacket/issues/2069), [#2135](https://github.com/fortra/impacket/issues/2135), [#2142](https://github.com/fortra/impacket/issues/2142), [#2178](https://github.com/fortra/impacket/issues/2178))
+    * [regsecrets.py](examples/regsecrets.py):
+        * Added SAM history parsing. ([#2059](https://github.com/fortra/impacket/issues/2059))
+    * [ticketer.py](examples/ticketer.py):
+        * Improved ccache handling and preserved KDC-issued lifetimes for diamond tickets. ([#2159](https://github.com/fortra/impacket/issues/2159), [#2181](https://github.com/fortra/impacket/issues/2181))
+    * [ticketConverter.py](examples/ticketConverter.py):
+        * Improved kirbi/ccache conversion, preserved ticket flags, converted all TGS entries, and added base64 output support. ([#2104](https://github.com/fortra/impacket/issues/2104), [#2159](https://github.com/fortra/impacket/issues/2159))
+    * [describeTicket.py](examples/describeTicket.py):
+        * Fixed credential indexing after skipped decrypts and improved Kerberoast debug output. ([#2117](https://github.com/fortra/impacket/issues/2117))
+    * [raiseChild.py](examples/raiseChild.py):
+        * Preserved PAC buffers, added AES support for modern Windows environments, and improved ticket retry behavior. ([#2164](https://github.com/fortra/impacket/issues/2164))
+    * [smbclient.py](examples/smbclient.py):
+        * Added ACL management support, recursive `rget`, and richer share listing output with type and comments. ([#1240](https://github.com/fortra/impacket/issues/1240), [#2110](https://github.com/fortra/impacket/issues/2110), [#2156](https://github.com/fortra/impacket/issues/2156))
+    * [mssqlclient.py](examples/mssqlclient.py):
+        * Added workstation/application name options, linked-server RPC enable/disable commands, custom CBT support, and better MSSQL shell behavior. ([#2074](https://github.com/fortra/impacket/issues/2074), [#2098](https://github.com/fortra/impacket/issues/2098), [#2134](https://github.com/fortra/impacket/issues/2134))
+    * [ntfs-read.py](examples/ntfs-read.py):
+        * Improved INDEX_ROOT file listing, sparse file support, error handling, and read correctness. ([#2106](https://github.com/fortra/impacket/issues/2106))
+    * [tstool.py](examples/tstool.py):
+        * Added Remote Desktop Shadowing support. ([#2064](https://github.com/fortra/impacket/issues/2064))
+    * [badsuccessor.py](examples/badsuccessor.py):
+        * Fixed ACE filtering and ObjectType GUID parsing that could cause false negatives when searching OUs. ([#2170](https://github.com/fortra/impacket/issues/2170))
+    * [GetUserSPNs.py](examples/GetUserSPNs.py):
+        * Added an option to avoid forcing RC4-HMAC when requesting a TGT. ([#2141](https://github.com/fortra/impacket/issues/2141))
+    * [owneredit.py](examples/owneredit.py):
+        * Improved distinguished name lookup behavior. ([#2162](https://github.com/fortra/impacket/issues/2162))
+    * [exchanger.py](examples/exchanger.py):
+        * Added Basic Authentication support. ([#2077](https://github.com/fortra/impacket/issues/2077))
+    * [reg.py](examples/reg.py):
+        * Added support for persistent registry key creation. ([#2113](https://github.com/fortra/impacket/issues/2113))
+
+3. New examples
+
+    * [dpapidump.py](examples/dpapidump.py) dumps DPAPI-related secrets. ([#1917](https://github.com/fortra/impacket/issues/1917))
+    * [checkMSSQLStatus.py](examples/checkMSSQLStatus.py) checks MSSQL status and CBT behavior. ([#2098](https://github.com/fortra/impacket/issues/2098))
+
+4. Project & packaging
+
+    * Removed the run-time dependency on setuptools. ([#2102](https://github.com/fortra/impacket/issues/2102))
+    * Removed remaining Python 2 compatibility code from WMI and ESE modules. ([#1804](https://github.com/fortra/impacket/issues/1804))
+
+As always, thanks a lot to all these contributors that make this library better every day:
+
+@0xpaperman, @7own, @aconite33, @aelmosalamy, @alexisbalbachan, @anadrianmanrique, @AndreySolod, @azoxlpf, @bash-c, @blankshiro, @chand-ashok, @cjwatson, @Coontzy1, @Croumi, @CSpanias, @ctjf, @Dfte, @DidierA, @epotseluevskaya, @fulc2um, @gabrielg5, @gaffner, @herbenderbler, @i-am-not-an-ai, @john57, @laxaa, @laxa, @masterDeus, @Mayyhem, @n3rada, @NeffIsBack, @omry99, @plur1bu5, @Q2Flc2FySec, @Romern, @r3seh, @rtpt-romankarwacik, @sbuck1, @ThatTotallyRealMyth, @TheFlamingCrab, @tomik92, @Tw1sm.
+
+## Impacket v0.13.0 (Oct 2025): 
+
+1. Library improvements 
+
+    * Major SMB client/server refactor adds setInfo support, CIFS datetime helpers, and safer default share access to enable remote attribute and timestamp management. (@covertivy) 
+
+    * Introduced per-structure encoding selectors and UTF-8-aware SMB structures so non-Latin resource names round-trip correctly. (@alexisbalbachan) 
+
+    * Strengthened LDAP/Kerberos handling with channel binding plus signing, schema alignment with ldap3, and LDAPS-based LAPS retrieval against Windows Server 2025 DCs. (@zblurx, @alexisbalbachan, @Ibrahim8879) 
+
+    * Improved DCE/RPC coverage with Netlogon authenticator fixes, updated DRS bind flags, expanded EVEN6 decoding, and a new ICPR interface to support relay-aware RPC workflows. (@ThePirateWhoSmellsOfSunflowers, @h3-josh-the-engineer, @NtAlexio2, @rtpt-romankarwacik) 
+
+    * Corrected SMB negotiation edge cases by fixing response padding, Unicode pipe lookups, and keyboard interrupts in SMB servers. (@rtpt-erikgeiser, @Abyss-emmm, @exploide) 
+
+    * SMB Server enhancements to align Impacket's implementation with standard (@jborean93) 
+
+  
+
+2. Authentication & relay tooling 
+
+    * Added WinRMS relay clients/servers. (@Defte_) 
+
+    * Improved IPv6 support, richer logging, and consistent console status reporting, plus an identity log to track compromised principals ( @gabrielg5) 
+
+    * Introduced an RPC relay server with Endpoint Mapper discovery . (@rtpt-romankarwacik) 
+
+    * Delivered SCCM Management/Distribution Point relay attacks. (@q-roland) 
+
+    * Enhanced shadow credentials, SOCKS plugins, and target rotation with better IPv6 awareness and stability. (@anadrianmanrique, @gabrielg5) 
+
+    * Added options to strip SSP from Net-NTLMv1 captures and write relay-captured hashes for cracking workflows. (@TurtleARM, @p0rtL6) 
+
+     
+
+3. Examples improvements 
+
+    * secretsdump.py gained a WMI shadow snapshot path, export hive boot key recovery, safer DRS flags, user-status reporting, and refined NTDS parsing. (@PeterGabaldon, @MaxToffy, @h3-josh-the-engineer, @Markb1337, @snovvcrash) 
+
+    * MSSQL tooling gained channel binding tokens, restored reliable connections, richer linked-server file transfers, and inline command execution. (@Defte_, @rtpt-romankarwacik, @trietend, @kiriknik, @Signum21) 
+
+    * Directory ACL helpers (`dacledit`, `owneredit`, `rbcd`, `ldapshell`) picked up mask selection, safer queries, and consistent `-dc-host` handling. (@dadevel, @shellinvictus, @Fabrizzio53, @ICheer_No0M, @gabrielg5) 
+
+    * SMB operator utilities add reconnect and autocomplete options in smbclient and prevent smbexec from hanging on completion. (@daddycocoaman, @trietend, @Vincent550102) 
+
+    * Remote access helpers such as rdp_check and wmiexec now support IPv6 targets and display created Process IDs for easier triage. (@gabrielg5, @alexisbalbachan) 
+
+  
+
+4. New examples 
+
+    * [attrib.py](examples/attrib.py) manipulates file attributes over SMB to showcase the new setInfo workflow. (@covertivy) 
+
+    * [filetime.py](examples/filetime.py) inspects and updates SMB file timestamps using the refreshed SMBConnection APIs. (@covertivy) 
+
+    * [badsuccessor.py](examples/badsuccessor.py) demonstrates the AD CS “bad successor” attack path. (@fulc2um) 
+
+    * [regsecrets.py](examples/regsecrets.py) extracts LSA secrets from remote registry hives through [MS-RRP]. (@laxaa, @laxa) 
+
+    * [samedit.py](examples/samedit.py) edits local SAM password hashes offline. (@iorpim) 
+
+    * [CheckLDAPStatus.py](examples/CheckLDAPStatus.py) checks LDAP signing status and LDAPS channel binding status. (@zblurx) 
+
+ 
+
+  
+
+5. Project & packaging 
+
+    * Added the `impacket.mssql` namespace, relaxed the pyOpenSSL pin, and declared Python 3.13 support while dropping 3.8. (@anadrianmanrique, @Defte_) 
+
+    * Replaced pkg_resources with importlib.metadata for lightweight version discovery. (@AdrianVollmer) 
+
+  
+
+6. Contributors 
+
+As always, thanks a lot to all these contributors that make this library better every day (up to now):
+   
+@Abyss-emmm, @AdrianVollmer, @NeffIsBack, @NtAlexio2, @rtpt-alexanderneumann, @asareynolds, @dadevel, @TurtleARM, @Defte_, @rtpt-erikgeiser, @Fabrizzio53, @fluffy-kaiju, @gabrielg5, @ICheer_No0M, @exploide, @jborean93, @nitbx, @laxaa, @daddycocoaman, @lucas0817, @Markb1337, @MaxToffy, @Ibrahim8879, @Narmjep, @NuclearFizzler, @iorpim, @CipherCloak, @PeterGabaldon, @b1two, @covertivy, @rtpt-romankarwacik, @ryanq47, @SAERXCIT, @Signum21, @ThePirateWhoSmellsOfSunflowers, @Vincent550102, @anadrianmanrique, @alexisbalbachan, @d0gkiller87, @Ridter, @fulc2um, @gjhami, @h3-josh-the-engineer, @kiriknik, @marcobarlottini, @p0rtL6, @q-roland, @shellinvictus, @trietend, @zblurx. 
+
+ 
+
+## Impacket v0.12.0 (Sep 2024):
+1. Library improvements
+    * Fixed broken hRSetServiceObjectSecurity method (@rkivys)
+    * Removed dsinternals dependency (@anadrianmanrique)
+    * Fixed srvs.hNetrShareEnum returning erronous shares (@cnotin)
+    * Fixed lmhash computing to support non standard characters in the password (@anadrianmanrique)
+    * Assorted fixes when processing Unicode data (@alexisbalbachan)
+    * Added `[MS-GKDI]` Group Key Distribution Protocol implementation (@zblurx)
+    * Fixed incorrect padding in SMBSessionSetupAndX_Extended_ResponseData (@rtpt-erikgeiser)
+    * Upgraded dependency pyreadline -> pyreadline3 (@anadrianmanrique)
+    * SMB Server:
+    	* Added query information level 0x0109 for smb1 "SMB_QUERY_FILE_STREAM_INFO" (@Adamkadaban)
+    	* Fixed filename encoding in queryPathInformation (@JerAxxxxxxx)
+    	* Fixed NextEntryOffset for large directory listings (@robnanola)
+     	* Fixed server returning an empty folder when cutting and pasting recursive directories (@robnanola)
+    * DHCP: Fixed encoding issues (@ujwalkomarla)
+
+3. Examples improvements
+    * [secretsdump.py](examples/secretsdump.py):
+        * Double DC Sync performance for DCs supporting SID lookups (@tomspencer)
+        * Added ability to skip dumping of SAM or SECURITY hives when performing remote operations (@RazzburyPi)
+        * Added ability to specify users to skip when dumping NTDS (@RazzburyPi)
+    * [ticketer.py](examples/ticketer.py):
+        * Support to create Sapphire tickets (@ShutdownRepo)
+    * [GetUserSPNs.py](examples/GetUserSPNs.py), [getTGT.py](examples/getTGT.py):
+        * Support for Kerberoasting without pre-authentication and ST request through AS-REQ (@ShutdownRepo)
+    * [wmiexec.py](examples/wmiexec.py):
+        * Fix kerberos with remoteHost & add '-target-ip'(@XiaoliChan)
+    * [ntlmrelayx.py](examples/ntlmrelayx.py):
+        * Added the creation of a new machine account through SMB (@BlWasp)
+        * NTLMRelayX Multirelay fixes for target handling, added --keep-relaying flag (@alexisbalbachan)
+        * Logging multirelay status when triggering the example (@gabrielg5)
+        * Write certificates to file rather than outputting b64 to console (@RazzburyPi)
+        * Improved ability to continue relaying to ADCS web enrollment endpoint in order to request multiple certificates for different users (@RazzburyPi)
+        * Fixed compatibility issue with other SMB clients connecting to the SOCKS proxy created by ntlmrelayx (@jfjallid)
+        * Allow configuration of the SOCKS5 address and port (@rtpt-erikgeiser)
+        * Fixed implementation of MSSQLShell (@gabrielg5)
+        * Logging notification of received connections in all relay servers (@gabrielg5)
+        * Add domain and username to interactive Ldap shell message (@minniear)
+        * Enhanced MSSQLShell in NTLMRelayX leveraging TcpShell & output messages (@gabrielg5)
+        * LDAP Attack: Bugfixes when parsing responses (@SAERXCIT)
+    * [getST.py](examples/getST.py):
+        * Added -self, -altservice and -u2u  for S4U2self abuse, S4U2self+u2u, and service substitution (@ShutdownRepo)
+        * Added ability to set the RENEW ticket option to renew a TGT (@shikatano)
+        * Fixed unicode encoding error when using the -impersonate flag (@alexisbalbachan)
+    * [getTGT.py](examples/getTGT.py):
+        * Added principalType as new parameter (@DevSpork)
+    * [reg.py](examples/reg.py):
+        * Start remote registry as unprivileged user in reg.py (@dadevel)
+        * Allow adding Binary values (@dc3l1ne)
+        * Add missing Null byte for REG_SZ values (@PfiatDe)
+        * Support for adding REG_MULTI_SZ values through (@garbrielg5)
+    * [smbclient.py](examples/smbclient.py):
+    	* Added ability to provide an output file that the smbclient mini shell will write commands and output to (@RazzburyPi)
+     	* Fixed path parse issue when running `tree` command (@trietend)
+    * [smbserver.py](examples/smbserver.py):
+        * Added parameter "-outputfile" to set smbserver log file(gabrielg5) 
+    * [DumpNTLMInfo.py](examples/DumpNTLMInfo.py):
+    	* Allow execution on non-default ports (@jeffmcjunkin)
+     	* Fixed KeyError exception when running with a Windows 2003 target (@XiaoliChan)
+    * [findDelegation.py](examples/findDelegation.py):
+    	* Added new column to show if SPN exists (@p0dalirius)
+    * [mssqlclient.py](examples/mssqlclient.py):
+     	* Added `-target-ip` parameter to allow Kerberos authentication without much change in the DNS configuration of the local machine (@Palkovsky)
+    * [mssqlshell.py](examples/mssqlshell.py):
+    	* Switching back to original DB after running `enum_impersonate` command (@exploide)
+        * Fixed logging in printReplies showing error messages (@gabrielg5)
+    * [registry-read.py](examples/registry-read.py):
+     	* Fixed scenario where value name contains backlash (@DidierA)
+    * [net.py](examples/net.py):
+     	* Fixed User "Account Active" property value (@marcobarlottini)
+        * Fixed log messages printing variables in the wrong order (@Cyb3rC3lt) 
+    * [rbcd.py](examples/rbcd.py):
+        * Handled SID not found in LDAP error (@ShutdownRepo)
+    * [GetUserSPNs.py](examples/GetUserSPNs.py):
+    	* Updated the help information for -outputfile to be consistent with -save (@scarvell)
+    * [ntfs-read.py](examples/ntfs-read.py):
+        * Minor refactor in ntfs-read.py to make it more human-readable (@NtAlexio2)
+    * [ldap_shell.py](examples/ldap_shell.py):
+        * Added support for dirsync and whoami commands (@nurfed1)
+    * [lookupsid.py](examples/lookupsid.py):
+        * Now supports kerberos auth (@A1vinSmith)
+    * [samrdump.py](examples/samrdump.py):
+        * Will fetch AdminComment using MSRPC (@joeldeleep)
+    * [tstool.py](examples/tstool.py):
+        * Added support for kerberos auth, resolves SIDs (@nopernik) 
+  
+4. New examples
+    * [describeTicket.py](examples/describeTicket.py): Ticket describer and decrypter. (@ShutdownRepo)
+    * [GetADComputers.py](examples/GetADComputers.py): Query's DC via LDAP and returns the COMPUTER objects and the useful attributes such as full dns name, operating system name and version. (@F-Masood)
+    * [GetLAPSPassword.py](examples/GetLAPSPassword.py): Extract LAPS passwords from LDAP (@zblurx and @dru1d-foofus)
+    * [dacledit.py](examples/dacledit.py): This script can be used to read, write, remove, backup, restore ACEs (Access Control Entries) in an object DACL (Discretionary Access Control List). (@ShutdownRepo) (@BlWasp_) (@Wlayzz)
+    * [owneredit.py](examples/owneredit.py): Added this script to abuse WriteOwner (ADS_RIGHT_WRITE_OWNER) access rights. This allows to take ownership of another object, and then edit that object's DACL (@ShutdownRepo) (@BlWasp_)
+
+As always, thanks a lot to all these contributors that make this library better every day (up to now):
+
+@tomspencer @anadrianmanrique @ShutdownRepo @dadevel @gjhami @NtAlexio2 @F-Masood @BlWasp @gabrielg5 @XiaoliChan @omry99 @Wlayzz @themaks @alexisbalbachan @RazzburyPi @jeffmcjunkin @p0dalirius @dc3l1ne @jfjallid @Palkovsky @rtpt-erikgeiser @trietend @zblurx @dru1d-foofus @PfiatDe @DidierA @marcobarlottini @PeterGabaldon @m8r1us @5yn @tzuralon @Adamkadaban @scarvell @JerAxxxxxxx @ujwalkomarla @robnanola @SAERXCIT @nurfed1 @A1vinSmith @joeldeleep @nopernik
+
+	  
+## Impacket v0.11.0 (Aug 2023):
+1. Library improvements 
+    * Added new Kerberos error codes (@ly4k).
+	* Added `[MS-TSTS]` Terminal Services Terminal Server Runtime Interface Protocol implementation (@nopernik).
+    * Changed the setting up for new SSL connections (@mpgn, @CT-H00K and @0xdeaddood).
+    * Added a callback function to smbserver for incoming authentications (@p0dalirius).
+    * Fix crash in winregistry (@laxa)
+    * Fixes in IDispatch derived classes in comev implementation (@NtAlexio2)
+    * Fix CVE-2020-17049 in ccache.py (@godylockz)
+    * Smbserver: Added SMB2_FILE_ALLOCATION_INFO type determination (@JerAxxxxxxx)
+    * tds: Fixed python3 incompatibility when receiving over TLS socket (@exploide)
+    * crypto: Ensure passwords are utf-8 encoded before deriving Kerberos keys (@jojonas)
+    * ese: Fixed python3 incompatibility when reading from db (@alexisbalbachan)
+    * ldap queries: Escaped characters are now correctly parsed (@alexisbalbachan)
+    * Support SASL authentication in ldap protocol (@NtAlexio2)
+
+2. Examples improvements
+    * [GetADUsers.py](examples/GetADUsers.py), [GetNPUsers.py](examples/GetNPUsers.py), [GetUserSPNs.py](examples/GetUserSPNs.py) and [findDelegation.py](examples/findDelegation.py):
+      * Added dc-host option to connect to specific KDC using its FQDN or NetBIOS name (@rmaksimov and @0xdeaddood).
+    * [GetNPUsers.py](examples/GetNPUsers.py)
+      * Printing TGT in stdout despite -outputfile parameter (@alexisbalbachan and @Zamanry)
+      * Fixed output hash format for AES128/256 (etype 17/18) (@erasmusc)
+    * [GetUserSPNs.py](examples/GetUserSPNs.py):
+      * Added LDAP paged search (@ThePirateWhoSmellsOfSunflowers and @SAERXCIT).
+      * Added a -stealth flag to remove the SPN filter from the LDAP query (@clavoillotte).
+      * Improved searchFilter (@ShutdownRepo)
+      * Use LDAP paged search (@ThePirateWhoSmellsOfSunflowers)
+    * [psexec.py](examples/psexec.py):
+      * Added support for name customization using a custom binary file (@Dramelac).
+    * [smbexec.py](examples/smbexec.py):
+      * Security fixes for privilege escalation vulnerabilities (@bugch3ck).
+      * Fixed python3 compatibility issues, added workaround TCP over NetBIOS being disabled (@ljrk0)
+    * [secretsdump.py](examples/secretsdump.py):
+      * Added a new option to extract only NTDS.DIT data for specific users based on an LDAP filter (@snovvcrash).
+      * Security fixes for privilege escalation vulnerabilities (@bugch3ck).  
+    * [mssqlclient.py](examples/mssqlclient.py):
+      * Added multiple new commands. Now supports xp_dirtree execution (@Mayfly277, @trietend and @TurtleARM).
+    * [ntlmrelayx.py](examples/ntlmrelayx.py):
+      * Added ability to trigger SQLShell when running ntlmrelayx in interactive mode (@sploutchy).
+      * Added filter option to the socks command in ntlmrelayx CLI (@shoxxdj)
+      * Added ability to register DNS records through LDAP.
+    * [addcomputer.py](examples/addcomputer.py), [rbcd.py](examples/rbcd.py):
+      * Allow weak TLS ciphers for LDAP connections (@AdrianVollmer)
+    * [Get-GPPPassword.py](examples/Get-GPPPassword.py):
+      * Better handling of various XML files in Group Policy Preferences (@p0dalirius)
+    * [smbclient.py](examples/smbclient.py):
+      * Added recursive file listing (@Sq00ky)
+    * [ticketer.py](examples/ticketer.py):
+      * Ticket duration is now specified in hours instead of days (@Dramelac)
+      * Added extra-pac implementation (@Dramelac)
+
+3. New examples
+    * [net.py](examples/net.py) Implementation of windows net.exe builtin tool (@NtAlexio2)
+    * [changepasswd.py](examples/changepasswd.py) New example that allows password changing or reseting through multiple protocols (@Alef-Burzmali, @snovvcrash, @bransh, @api0cradle and @p0dalirius)
+    * [DumpNTLMInfo.py](examples/DumpNTLMInfo.py) New example that dumps remote host information in ntlm authentication model, without credentials. For SMB protocols v1, v2 and v3. (@NtAlexio2)
+    
+As always, thanks a lot to all these contributors that make this library better every day (up to now):
+
+@ly4k @nopernik @snovvcrash @ShutdownRepo @kiwids0220 @mpgn @CT-H00K @rmaksimov @arossert @aevy-syn @tirkarthi @p0dalirius @Dramelac @Mayfly277 @S3cur3Th1sSh1t @nobbd @AdrianVollmer @trietend @TurtleARM @ThePirateWhoSmellsOfSunflowers @SAERXCIT @clavoillotte @Marshall-Hallenbeck @sploutchy @almandin @rtpt-alexanderneumann @JerAxxxxxxx @NtAlexio2 @laxa @godylockz @exploide @jojonas @Zamanry @erasmusc @bugch3ck @ljrk0 @Sq00ky @shoxxdj @Alef-Burzmali @bransh @api0cradle @alexisbalbachan @0xdeaddood @NtAlexio2 @sanmopre
+
+
+## Impacket v0.10.0 (May 2022):
+
+1. Library improvements 
+    * Dropped support for Python 2.7.
+    * Refactored the testing infrastructure (@martingalloar):
+      * Added `pytest` as the testing framework to organize and mark test
+        cases. `Tox` remain as the automation framework, and `Coverage.py`
+        for measuring code coverage.
+      * Custom bash scripts were replaced with test cases auto-discovery.
+      * Local and remote test cases were marked for easy run and configuration. 
+      * DCE/RPC endpoint test cases were refactored and moved to a new layout. 
+      * An initial testing guide with the main steps to prepare a testing environment and run them. 
+      * Fixed a good amount of DCE/RPC endpoint test cases that were failing. 
+      * Added tests for `[MS-PAR]`, `[MS-RPRN]`, CCache and DPAPI.
+    * Added a function to compute the Netlogon Authenticator at client-side in `[MS-NRPC]` (@0xdeaddood)
+    * Added `[MS-DSSP]` protocol implementation (@simondotsh)
+    * Added GetDriverDirectory functions to `[MS-PAR]` and `[MS-RPRN]` (@raithedavion)
+    * Refactored the Credential Cache:
+	  * Added new parseFile function to ccache.py (@rmaksimov)
+	  * Added support for loading CCache Version 3 (@reznok)
+	  * Modified fromKRBCRED function used to load a Kirbi file (@0xdeaddood)
+	  * Fixed Ccache to Kirbi conversion (@ShutdownRepo)
+	* Fixed default NTLM server challenge in smbserver (@rtpt-jonaslieb)
+
+2. Examples improvements
+	* [exchanger.py](examples/exchanger.py):
+	  * Fixed a bug when a Global Address List doesn't exist on the server (@mohemiv)
+	* [mimikatz.py](examples/mimikatz.py)
+	  * Updated intro to not trigger the AV on windows (@mpgn)
+	* [ntlmrelayx.py](examples/ntlmrelayx.py):
+	  * Implemented RAW Relay Server (@CCob)
+	  * Added an LDAP attack dumping information about the domain's ADCS enrollment services (@SAERXCIT)
+      * Added multi-relay feature to the HTTP Relay Server. Now one incoming HTTP connection could be 
+        used against multiple targets (@0xdeaddood)
+      * Added an option to disable the multi-relay feature (@zblurx and @0xdeaddood)
+      * Added multiple HTTP listeners running at the same time (@SAERXCIT)
+      * Support for the ADCS ESC1 and ESC6 attacks (@hugo-syn)
+      * Added Shadow Credentials attack (@ShutdownRepo, @Tw1sm, @nodauf and @p0dalirius)
+      * Added the ability to define a password for the LDAP attack addComputer (@ShutdownRepo)
+      * Added rename_computer and modify add_computer in LDAP interactive shell (@capnkrunchy)
+      * Implemented StartTLS (@ThePirateWhoSmellsOfSunflowers)
+    * [reg.py](examples/reg.py):
+      * Added save function to allow remote saving of registry hives (@ShutdownRepo and @scopedsecurity)
+    * [secretsdump.py](examples/secretsdump.py):
+      * Added an option to dump credentials using the Kerberos Key List attack (@0xdeaddood)
+    * [smbpasswd.py](examples/smbpasswd.py):
+      * Added an option to force credentials change via injecting new values into SAM (@snovvcrash and @alefburzmali)
+3. New examples
+	* [machine_role.py](examples/machine_role.py): This script retrieves a host's role along with its 
+	  primary domain details (@simondotsh)
+    * [keylistattack.py](examples/keylistattack.py): This example implements the Kerberos Key List
+      attack to dump credentials abusing RODCs and Azure AD Kerberos Servers (@0xdeaddood)
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@rmaksimov @simondotsh @CCob @raithedavion @SAERXCIT @Maltemo @dirkjanm @reznok @ShutdownRepo @scopedsecurity @Tw1sm @nodauf @p0dalirius @zblurx @hugo-syn @capnkrunchy @mohemiv @mpgn @rtpt-jonaslieb @snovvcrash @alefburzmali @ThePirateWhoSmellsOfSunflowers @jlvcm
+
+## Impacket v0.9.24 (October 2021):
+
+1. Library improvements 
+	* Fixed WMI objects parsing (@franferrax)
+	* Added the RpcAddPrinterDriverEx method and related structures to `[MS-RPRN]`: Print System Remote Protocol (@cube0x0)
+	* Initial implementation of `[MS-PAR]`: Print System Asynchronous Remote Protocol (@cube0x0)
+	* Complying `[MS-RPCH]` with HTTP/1.1 (@mohemiv) 
+	* Added return of server time in case of Kerberos error (@ShutdownRepo and @Hackndo)
+
+2. Examples improvements
+	* [getST.py](examples/getST.py):
+	   * Added support for a custom additional ticket for S4U2Proxy (@ShutdownRepo)
+	* [ntlmrelayx.py](examples/ntlmrelayx.py):
+	   * Added Negotiate authentication support to the HTTP server (@LZD-TMoreggia) 
+	   * Added anonymous session handling in the HTTP server (@0xdeaddood)
+	   * Fixed error in ldapattack.py when trying to escalate with machine account (@Rcarnus) 
+	   * Added the implementation of AD CS attack (@ExAndroidDev)
+	   * Disabled the anonymous logon in the SMB server (@ly4k)
+	* [psexec.py](examples/psexec.py):
+	   * Fixed decoding problems on multi bytes characters (@p0dalirius)
+	* [reg.py](examples/reg.py):
+	   * Implemented ADD and DELETE functionalities (@Gifts) 
+	* [secretsdump.py](examples/secretsdump.py):
+	   * Speeding up NTDS parsing (@skelsec)
+	* [smbclient.py](examples/smbclient.py):
+	   * Added 'mget' command which allows the download of multiple files (@deadjakk)
+	   * Handling empty search count in FindFileBothDirectoryInfo (@martingalloar)
+	* [smbpasswd.py](examples/smbpasswd.py):
+	   * Added the ability to change a user's password providing NTLM hashes (@snovvcrash)
+	* [smbserver.py](examples/smbserver.py): 
+	   * Added NULL SMBv2 client connection handling (@0xdeaddood)
+	   * Hardened path checks and Added TID checks (@martingalloar)
+	   * Added SMB2 support to QUERY_INFO Request and Enabled SMB_COM_FLUSH method (@0xdeaddood)
+	   * Added missing constant and structure for the QUERY_FS Information Level SMB_QUERY_FS_DEVICE_INFO (@martingalloar)  
+	* [wmipersist.py](examples/wmipersist.py):
+	   * Fixed VBA script execution and improved error checking (@franferrax)
+
+3. New examples
+	* [rbcd.py](examples/rbcd.py): Example script for handling the msDS-AllowedToActOnBehalfOfOtherIdentity property of a target computer (@ShutdownRepo and @p0dalirius) (based on the previous work of @tothi and @NinjaStyle82)
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@deadjakk @franferrax @cube0x0 @w0rmh013 @skelsec @mohemiv @LZD-TMoreggia @exploide @ShutdownRepo @Hackndo @snovvcrash @rmaksimov @Gifts @Rcarnus @ExAndroidDev @ly4k @p0dalirius
+
+
+## Impacket v0.9.23 (June 2021):
+
+1. Library improvements 
+	* Support connect timeout with SMBTransport (@vruello)
+	* Speeding up DcSync (@mohemiv)
+	* Fixed Python3 issue when serving SOCKS5 requests (@agsolino) 
+	* Moved docker container to Python 3.8 (@mgallo) 
+	* Added basic GitHub Actions workflow (@mgallo)  
+	* Fixed Path Traversal vulnerabilities in `smbserver.py` - CVE-2021-31800 (@omriinbar AppSec Researcher at CheckMarx) 
+	* Fixed POST request processing in `httprelayserver.py` (@Rcarnus) 
+	* Added cat command to `smbclient.py` (@mxrch) 
+	* Added new features to the LDAP Interactive Shell to facilitate AD exploitation (@AdamCrosser) 
+	* Python 3.9 support (@meeuw and @cclauss) 
+
+2. Examples improvements
+	* [addcomputer.py](examples/addcomputer.py):  
+	   * Enable the machine account created via SAMR (@0xdeaddood) 
+	* [getST.py](examples/getST.py):  
+	   * Added exploit for CVE-2020-17049 - Kerberos Bronze Bit attack (@jakekarnes42) 
+	   * Compute NTHash and AESKey for the Bronze Bit attack automatically (@snovvcrash) 
+	* [ntlmrelayx.py](examples/ntlmrelayx.py): 
+	   * Fixed target parsing error (@0xdeaddood) 
+	* [wmipersist.py](examples/wmipersist.py):  
+	   * Fixed `filterBinding` error (@franferrax) 
+	   * Added PowerShell option for semi-interactive shells in `dcomexec.py`, `smbexec.py`
+         and `wmiexec.py` (@snovvcrash) 
+	   * Added new parameter to select `COMVERSION` in `dcomexec.py`, `wmiexec.py`,
+         `wmipersist.py` and `wmiquery.py` (@zexusx26) 
+
+3. New examples 
+	* [Get-GPPPassword.py](examples/Get-GPPPassword.py): This example extracts and decrypts
+      Group Policy Preferences passwords using streams for treating files instead of mounting
+      shares. Additionally, it can parse GPP XML files offline (@ShutdownRepo and @p0dalirius) 
+	* [smbpasswd.py](examples/smbpasswd.py): This script is an alternative to `smbpasswd` tool and
+      intended to be used for changing expired passwords remotely over SMB (MSRPC-SAMR) (@snovvcrash) 
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version): 
+
+@mpgn @vruello @mohemiv @jagotu @jakekarnes42 @snovvcrash @zexusx26 @omriinbar @Rcarnus @nuschpl @mxrch @ShutdownRepo @p0dalirius @AdamCrosser @franferrax @meeuw and @cclauss 
+
+
+## Impacket v0.9.22 (November 2020):
+
+1. Library improvements
+    * Added implementation of RPC over HTTP v2 protocol (by @mohemiv).
+    * Added `[MS-NSPI]`, `[MS-OXNSPI]` and `[MS-OXABREF]` protocol implementations (by @mohemiv).
+    * Improved the multi-page results in LDAP queries (by @ThePirateWhoSmellsOfSunflowers).
+    * NDR parser optimization (by @mohemiv).
+    * Improved serialization of WMI method parameters (by @tshmul).
+    * Introduce the `[MS-NLMP]` `2.2.2.10` `VERSION` structure in `NTLMAuthNegotiate` messages (by @franferrax).
+    * Added some NETLOGON structs for `NetrServerPasswordSet2` (by @dirkjanm).
+    * Python 3.8 support.
+
+2. Examples improvements
+	* [atexec.py](examples/atexec.py):
+      * Fixed after MS patches related to RPC attacks (by @mohemiv).
+	* [dpapi.py](examples/dpapi.py):
+      * Added `-no-pass`, `pass-the-hash` and AES Key support for backup subcommand.
+	* [GetNPUsers.py](examples/GetNPUsers.py):
+      * Added ability to enumerate targets with Kerberos KRB5CC (by @rmaksimov).
+	* [GetUserSPNs.py](examples/GetUserSPNs.py):
+      * Added new features for kerberoasting (by @mohemiv).
+	* [ntlmrelayx.py](examples/ntlmrelayx.py):
+	  * Added ability to relay on new Windows versions that have SMB guest access disabled by default.
+	  * Added option to specify the NTLM Server Challenge used when receiving a connection.
+	  * Added relaying to RPC support (by @mohemiv).
+	  * Implemented WCFRelayServer (by @cnotin).
+	  * Added Zerologon DCSync Relay Client (by @dirkjanm).
+	  * Fixed issue in ldapattack.py when relaying and creating computer in CN=Computers (by @Hackndo).
+	* [rpcdump.py](examples/rpcdump.py):
+      * Added RPC over HTTP v2 support (by @mohemiv).
+	* [secretsdump.py](examples/secretsdump.py):
+	   * Added ability to specifically delete a shadow based on its ID (by @phefley).
+	   * Dump plaintext machine account password when dumping the local registry secrets(by @dirkjanm).
+
+3. New examples
+	- [exchanger.py](examples/exchanger.py): A tool for connecting to MS Exchange via
+      RPC over HTTP v2 (by @mohemiv).
+	- [rpcmap.py](examples/rpcmap.py): Scan for listening DCE/RPC interfaces (by @mohemiv).
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@mohemiv @mpgn @Romounet @ThePirateWhoSmellsOfSunflowers @rmaksimov @fuzzKitty @tshmul @spinenkoia @AaronRobson @ABCIFOGeowi40 @cclauss @cnotin @5alt @franferrax @Dliv3 @dirkjanm @Mr-Gag @vbersier @phefley @Hackndo
+
+
+## Impacket v0.9.21 (March 2020):
+
+1. Library improvements 
+    * New methods into `CCache` class to import/export kirbi (`KRB-CRED`) formatted tickets (by @Zer1t0). 
+    * Add `FSCTL_SRV_ENUMERATE_SNAPSHOTS` functionality to `SMBConnection` (by @rxwx). 
+    * Changes in NetBIOS classes in `nmb.py` (`select()` by `poll()` read from socket) (by @cnotin). 
+    * Timestamped logging added. 
+    * Interactive shell to perform LDAP operations (by @mlefebvre). 
+    * Added two DCE/RPC calls in `tsch.py` (by @mohemiv). 
+    * Single-source the version number and standardize on semantic + pre-release + local versioning (by @jsherwood0). 
+    * Added implementation for keytab files (by @kcirtapw). 
+    * Added SMB 3.1.1 support for Client SMB Connections.
+
+2. Examples improvements 
+    * [smbclient.py](examples/smbclient.py):
+      * List the VSS snapshots for a specified path (by @rxwx). 
+    * [GetUserSPNs.py](examples/GetUserSPNs.py):
+      * Added delegation information associated with accounts (by @G0ldenGunSec). 
+    * [dpapi.py](examples/dpapi.py):  
+      * Added more functions to decrypt masterkeys based on SID + hashes/key. Also support supplying hashes instead of the password for decryption(by @dirkjanm). 
+      * Pass the hash support for backup key retrieval (by @imaibou). 
+      * Added feature to decrypt a user's masterkey using the MS-BKRP (by @imaibou). 
+    * [raiseChild.py](examples/raiseChild.py):
+      * Added a new flag to specify the RID of a user to dump credentials (by @0xdeaddood). 
+    * Added flags to bypass badly made detection use cases (by @MaxNad): 
+      * [smbexec.py](examples/smbexec.py):
+        * Possibility to rename the PSExec uploaded binary name with the `-remote-binary-name` flag. 
+      * [psexec.py](examples/psexec.py):
+        * Possibility to use another service name with the `-service-name` flag. 
+    * [ntlmrelayx.py](examples/ntlmrelayx.py): 
+      * Added a flag to use a SID as the escalate user for delegation attacks (by @0xe7). 
+      * Support for dumping LAPS passwords (by @praetorian-adam-crosser). 
+      * Added LDAP interactive mode that allow an attacker to manually perform basic operations
+        like creating a new user, adding a user to a group , dump the AD, etc. (by @mlefebvre). 
+      * Support for multiple relays through one SMB connection (by @0xdeaddood). 
+      * Added support for dumping gMSA passwords (by @cube0x0). 
+    * [ticketer.py](examples/ticketer.py):
+      * Added an option to use the SPNs keys from a keytab for a silver ticket(by @kcirtapw) 
+
+3. New Examples 
+    - [addcomputer.py](examples/addcomputer.py): Allows add a computer to a domain using LDAP
+      or SAMR (SMB) (by @jagotu) 
+    - [ticketConverter.py](examples/ticketConverter.py): This script converts kirbi files,
+      commonly used by mimikatz, into ccache files used by Impacket, and vice versa (by @Zer1t0). 
+    - [findDelegation.py](examples/findDelegation.py): Simple script to quickly list all
+      delegation relationships (unconstrained, constrained, resource-based constrained) in
+      an AD environment (by @G0ldenGunSec). 
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version): 
+
+@jagotu, @Zer1t0 ,@rxwx, @mpgn, @danhph, @awsmhacks, @slasyz, @cnotin, @exploide, @G0ldenGunSec, @dirkjanm, @0xdeaddood, @MaxNad, @imaibou, @BarakSilverfort, @0xe7, @mlefebvre, @rmaksimov, @praetorian-adam-crosser, @jsherwood0, @mohemiv, @justin-p, @cube0x0, @spinenkoia, @kcirtapw, @MrAnde7son, @fridgehead, @MarioVilas. 
+
+
+## Impacket v0.9.20 (September 2019):
+
+1. Library improvements
+    * Python 3.6 support! This is the first release supporting Python 3.x so please issue tickets
+      whenever you find something not working as expected. Libraries and examples should be fully
+      functional. 
+    * Test coverage [improvements](https://github.com/SecureAuthCorp/impacket/pull/540) by @infinnovation-dev
+    * Anonymous SMB 2.x Connections are not encrypted anymore (by @cnotin)   
+    * Support for [multiple PEKs](https://github.com/SecureAuthCorp/impacket/pull/618) when decrypting Windows 2016 DIT files (by @mikeryan) 
+
+2. Examples improvements
+    * [ntlmrelayx.py](examples/ntlmrelayx.py): 
+      * [CVE-2019-1019](https://github.com/SecureAuthCorp/impacket/pull/635): Bypass SMB singing for unpatched (by @msimakov)
+      * Added [POC](https://github.com/SecureAuthCorp/impacket/pull/637) code for CVE-2019-1040 (by @dirkjanm)
+      * Added NTLM relays leveraging [Webdav](https://github.com/SecureAuthCorp/impacket/pull/652) authentications (by @salu90)
+
+3. New Examples
+    * [kintercept.py](examples/kintercept.py): A tool for intercepting krb5 connections and for
+      testing KDC handling S4U2Self with unkeyed checksum (by @iboukris)
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@infinnovation-dev, @cnotin, @mikeryan, @SR4ven, @cclauss, @skorov, @msimakov, @dirkjanm, @franferrax, @iboukris, @n1ngod, @c0d3z3r0, @MrAnde7son.
+
+
+## Impacket v0.9.19 (April 2019):
+
+1. Library improvements
+    * [[MS-EVEN]](impacket/dcerpc/v5/even.py) Interface implementation (Initial - by @MrAnde7son )
+
+2. Examples improvements
+    * [ntlmrelayx.py](examples/ntlmrelayx.py): 
+      * Socks local admin check (by @imaibou)
+      * Add Resource Based Delegation features (by @dirkjanm)
+    * [smbclient.py](examples/smbclient.py):
+      * Added ability to create/remove mount points to exploit James Forshaw's
+        [Abusing Mount Points over the SMB Protocol](https://tyranidslair.blogspot.com/2018/12/abusing-mount-points-over-smb-protocol.html) technique (by @Qwokka)
+    * [GetST.py](examples/getST.py):
+      * Added resource-based constrained delegation support to S4U (@eladshamir)
+    * [GetNPUsers.py](examples/GetNPUsers.py):
+      * Added hashcat/john format and users file input (by @Zer1t0)
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@dirkjanm, @MrAnde7son, @ibo, @franferrax, @Qwokka, @CaledoniaProject , @eladshamir, @Zer1t0, @martingalloar, @muizzk, @Petraea, @SR4ven, @Fist0urs, @Zer1t0.
+
+
+## Impacket v0.9.18 (December 2018):
+
+1. Library improvements
+    * Replace unmaintained PyCrypto for pycryptodome (@dirkjanm)
+    * Using cryptographically secure pseudo-random generators
+    * Kerberos "no pre-auth and RC4" handling in GetKerberosTGT (by @qlemaire)
+    * Test cases adjustments, travis and flake support (@cclauss)
+    * Python3 test cases fixes (@eldipa)
+    * Adding DPAPI / Vaults related structures and functions to decrypt secrets
+    * [[MS-RPRN]](impacket/dcerpc/v5/rprn.py) Interface implementation (Initial)
+
+2. Examples improvements
+    * [ntlmrelayx.py](examples/ntlmrelayx.py):
+      * Optimize ACL enumeration and improve error handling in ntlmrelayx LDAP attack (by @dirkjanm)
+    * [secretsdump.py](examples/secretsdump.py):
+      * Added dumping of machine account Kerberos keys (@dirkjanm). `DPAPI_SYSTEM` LSA Secret is now parsed and key contents are shown.
+    * [GetUserSPNs.py](examples/GetUserSPNs.py):
+      * Bugfixes and cross-domain support (@dirkjanm)
+
+3. New Examples
+    * [dpapi.py](examples/dpapi.py): Allows decrypting vaults, credentials and masterkeys protected by DPAPI. Domain backup key support added by @MrAnde7son 
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@dirkjanm, @MrAnde7son, @franferrax, @MrRobot86, @qlemaire, @cauan, @eldipa.
+
+
+## Impacket v0.9.17 (May 2018):
+
+1. Library improvements
+    * New `[MS-PAC]` [Implementation](impacket/krb5/pac.py).
+    * [LDAP engine](impacket/ldap): Added extensibleMatch string filter parsing, simple
+      paging support and handling of unsolicited notification (by @kacpern)
+    * [ImpactDecoder](impacket/ImpactDecoder.py): Add `EAPOL`, `BOOTP` and `DHCP` packet
+      decoders (by Michael Niewoehner)
+    * [Kerberos engine](impacket/krb5): `DES-CBC-MD5` support to kerberos added (by @skelsec)
+    * [SMB3 engine](https://github.com/SecureAuthCorp/impacket/commit/f62fc5c3946430374f92404e892f8c48943d411c): If target server supports SMB >= 3, encrypt packets by default.
+    * Initial `[MS-DHCPM]` and `[MS-EVEN6]` Interface implementation by @MrAnde7son 
+    * Major improvements to the [NetBIOS layer](https://github.com/SecureAuthCorp/impacket/commit/0808e45b796741aea4162bd756e3f54522e8045b).
+      More use of [structure.py](impacket/structure.py) in there.
+    * [MQTT](https://github.com/SecureAuthCorp/impacket/commit/8cef002928ca52be4e9476a87a54d836b5efa81e) Protocol Implementation and example.
+    * Tox/Coverage Support added, test cases moved to its own directory. Major overhaul.
+    * Many fixes and improvements in Kerberos, SMB and DCERPC (too much to name in a few lines).
+
+2. Examples improvements
+    * [GetUserSPNs.py](examples/GetUserSPNs.py):
+      * `-request-user` parameter added. Requests STs for the SPN associated to the user
+        specified. Added support for AES Kerberoast tickets (by @elitest).
+    * [services.py](examples/services.py):
+      * Added port 139 support and related options (by @real-datagram).
+    * [samrdump.py](examples/samrdump.py): 
+      * `-csv` switch to output format in CSV added.
+    * [ntlmrelayx.py](examples/ntlmrelayx.py):
+      * Major architecture overhaul. Now working mostly through dynamically loaded plugins. SOCKS proxy support for relayed connections. Specific attacks for every protocol and new protocols support (IMAP, POP3, SMTP). Awesome contributions by @dirkjanm.
+    * [secretsdump.py](examples/secretsdump.py):
+      * AES(128) support for SAM hashes decryption. OldVal parameter dump added to LSA
+        secrets dump (by @Ramzeth).
+    * [mssqlclient.py](examples/mssqlclient.py):
+      * Alternative method to execute cmd's on MSSQL (sp_start_job). (by @Kayzaks).
+    * [lsalookupsid.py](examples/lsalookupsid.py):
+      * Added no-pass and domain-users options (by @ropnop). 
+
+3. New Examples
+    * [ticketer.py](examples/ticketer.py): Create Golden/Silver tickets from scratch or
+      based on a template (legally requested from the KDC) allowing you to customize 
+      some of the parameters set inside the `PAC_LOGON_INFO` structure, in particular the
+      groups, extrasids, duration, etc. Silver tickets creation by @machosec and @bransh.
+    * [GetADUsers.py](examples/GetADUsers.py):  Gathers data about the domain's users and
+      their corresponding email addresses. It will also include some extra information
+      about last logon and last password set attributes.
+    * [getPac.py](examples/getPac.py): Gets the PAC (Privilege Attribute Certificate)
+      structure of the specified target user just having a normal authenticated user
+      credentials. It does so by using a mix of `[MS-SFU]`'s `S4USelf` + User to User
+      Kerberos Authentication.
+    * [getArch.py](examples/getArch.py): Will connect against a target (or list of targets)
+      machine/s and gather the OS architecture type installed by (ab)using a documented MSRPC feature.
+    * [mimikatz.py](examples/mimikatz.py): Mini shell to control a remote mimikatz RPC
+      server developed by @gentilkiwi.
+    * [sambaPipe.py](examples/sambaPipe.py): Will exploit CVE-2017-7494, uploading and
+      executing the shared library specified by the user through the `-so` parameter.
+    * [dcomexec.py](examples/dcomexec.py): A semi-interactive shell similar to `wmiexec.py`,
+      but using different DCOM endpoints. Currently supports `MMC20.Application`, `ShellWindows` and
+      `ShellBrowserWindow` objects. (contributions by @byt3bl33d3r).
+    * [getTGT.py](examples/getTGT.py): Given a password, hash or aesKey, this script will
+      request a TGT and save it as ccache.
+    * [getST.py](examples/getST.py): Given a password, hash, aesKey or TGT in ccache, this
+      script will request a Service Ticket and save it as ccache. If the account has constrained
+      delegation (with protocol transition) privileges you will be able to use the `-impersonate`
+      switch to request the ticket on behalf other user.
+
+As always, thanks a lot to all these contributors that make this library better every day (since last version):
+
+@dirkjanm, @real-datagram, @kacpern, @martinuy, @xelphene, @blark, @the-useless-one, @contactr2m, @droc, @martingalloar, @skelsec, @franferrax, @Fr0stbyt3, @ropnop, @MrAnde7son, @machosec, @federicoemartinez, @elitest, @symeonp, @Kanda-Motohiro, @Ramzeth, @mohemiv, @arch4ngel, @derekchentrendmicro, @Kayzaks, @donwayo, @bao7uo, @byt3bl33d3r, @xambroz, @luzpaz, @TheNaterz, @Mikkgn, @derUnbekannt.
+
+
+## Impacket v0.9.15 (June 2016):
+
+1. Library improvements
+   * `SMB3.create`: define `CreateContextsOffset` and `CreateContextsLength` when applicable (by @rrerolle)
+   * Retrieve user principal name from `CCache` file allowing to call any script with `-k` and just the target system (by @MrTchuss)
+   * Packet fragmentation for DCE RPC layer mayor overhaul.
+   * Improved pass-the-key attacks scenarios (by @skelsec)
+   * Adding a minimalistic LDAP/s implementation (supports PtH/PtT/PtK). Only search is available (and you need to
+     build the search filter yourself)
+   * IPv6 improvements for DCERPC/LDAP and Kerberos
+
+2. Examples improvements
+   * Adding `-dc-ip` switch to all examples. It allows specifying what the IP for the domain is.
+     It assumes the DC and KDC resides in the same server.
+   * `secretsdump.py`:
+     * Adding support for Win2016 TP4 in LOCAL or `-use-vss` mode
+     * Adding `-just-dc-user` switch to download just a single user data (DRSUAPI mode only)
+     * Support for different ReplEpoch (DRSUAPI only)
+     * pwdLastSet is also included in the output file
+     * New structures/flags added for 2016 TP5 PAM support
+   * `wmiquery.py`:
+     * Adding `-rpc-auth-level` switch (by @gadio)
+   * `smbrelayx.py`:
+     * Added option to specify authentication status code to be sent to requesting client (by @mgeeky)
+     * Added one-shot parameter. After successful authentication, only execute the attack once for each target (per protocol)
+
+3. New Examples
+   * `GetUserSPNs.py`: This module will try to find Service Principal Names that are associated with normal user account.
+     This is part of the kerberoast attack researched by Tim Medin (@timmedin)
+   * `ntlmrelayx.py`: `smbrelayx.py` on steroids!. NTLM relay attack from/to multiple protocols (HTTP/SMB/LDAP/MSSQL/etc)
+     (by @dirkjanm)
+
+
+## Impacket v0.9.14 (January 2016):
+
+1. Library improvements
+   * `[MS-TSCH]` - ATSVC, SASec and ITaskSchedulerService Interface implementations
+   * `[MS-DRSR]` - Directory Replication Service DRSUAPI Interface implementation
+   * Network Data Representation (NDR) runtime overhaul. Big performance and reliability improvements achieved
+   * Unicode support (optional) for the SMBv1 stack (by @rdubourguais)
+   * NTLMv2 enforcement option on SMBv1 client stack (by @scriptjunkie)
+   * Kerberos support for TDS (MSSQL)
+   * Extended present flags support on RadioTap class
+   * Old DCERPC runtime code removed
+
+2. Examples improvements
+   * `mssqlclient.py`:
+     * Added Kerberos authentication support
+   * `atexec.py`:
+     * It now uses ITaskSchedulerService interface, adding support for Windows 2012 R2
+   * `smbrelayx.py`:
+     * If no file to upload and execute is specified (-E) it just dumps the target user's hashes by default
+     * Added -c option to execute custom commands in the target (by @byt3bl33d3r)
+   * `secretsdump.py`:
+     * Active Directory hashes/Kerberos keys are dumped using `[MS-DRSR]` (`IDL_DRSGetNCChanges` method)
+       by default. VSS method is still available by using the -use-vss switch
+     * Added `-just-dc` (Extract only NTDS.DIT NTLM Hashes and Kerberos) and
+       `-just-dc-ntlm` (only NTDS.DIT NTLM Hashes) options
+     * Added resume capability (only for NTDS in DRSUAPI mode) in case the connection drops.
+       Use `-resumefile` option.
+     * Added Primary:CLEARTEXT Property from supplementalCredentials attribute dump (`[MS-SAMR]` `3.1.1.8.11.5`)
+     * Add support for multiple password encryption keys (PEK) (by @s0crat)
+   * `goldenPac.py`:
+     * Tests all DCs in domain and adding forest's enterprise admin group inside PAC
+
+3. New examples
+   * `raiseChild.py`: Child domain to forest privilege escalation exploit. Implements a
+     child-domain to forest privilegeescalation as [detailed by Sean Metcalf](https://adsecurity.org/?p=1640).
+   * `netview.py`: Gets a list of the sessions opened at the remote hosts and keep track of them (original idea by @mubix)
+
+
+## Impacket v0.9.13 (May 2015):
+
+1. Library improvements
+   * Kerberos support for SMB and DCERPC featuring:
+      * `kerberosLogin()` added to SMBConnection (all SMB versions).
+      * Support for `RPC_C_AUTHN_GSS_NEGOTIATE` at the DCERPC layer. This will 
+        negotiate Kerberos. This also includes DCOM.
+      * Pass-the-hash, pass-the-ticket and pass-the-key support.
+      * Ccache support, compatible with Kerberos utilities (kinit, klist, etc).
+      * Support for `RC4`, `AES128_CTS_HMAC_SHA1_96` and `AES256_CTS_HMAC_SHA1_96` ciphers.
+      * Support for `RPC_C_AUTHN_LEVEL_PKT_PRIVACY`/`RPC_C_AUTHN_LEVEL_PKT_INTEGRITY`.
+   * `[MS-SAMR]`: Supplemental Credentials support (used by secretsdump.py)
+   * SMBSERVER improvements:
+      * SMB2 (2.002) dialect experimental support. 
+      * Adding capability to export to John The Ripper format files
+   * Library logging overhaul. Now there's a single logger called `impacket`.
+
+2. Examples improvements
+   * Added Kerberos support to all modules (incl. pass-the-ticket/key)
+   * Ported most of the modules to the new dcerpc.v5 runtime.
+   * `secretsdump.py`:
+     * Added dumping Kerberos keys when parsing NTDS.DIT
+   * `smbserver.py`:
+     * Support for SMB2 (not enabled by default)
+   * `smbrelayx.py`:
+     * Added support for MS15-027 exploitation.
+
+3. New examples
+   * `goldenPac.py`: MS14-068 exploit. Saves the golden ticket and also launches a 
+     psexec session at the target.
+   * `karmaSMB.py`: SMB Server that answers specific file contents regardless of
+     the SMB share and pathname requested. 
+   * `wmipersist.py`: Creates persistence over WMI. Adds/Removes WMI Event 
+     Consumers/Filters to execute VBS based on a WQL filter or timer specified.
+
+
+## Impacket v0.9.12 (July 2014):
+
+1. Library improvements
+   * The following protocols were added based on its standard definition
+      * `[MS-DCOM]` - Distributed Component Object module Protocol (`dcom.py`)
+      * `[MS-OAUT]` - OLE Automation Protocol (`dcom/oaut.py`)
+      * `[MS-WMI]`/`[MS-WMIO]` : Windows Management Instrumentation Remote Protocol (`dcom/wmi.py`)
+
+2. New examples
+   * `wmiquery.py`: executes WMI queries and get WMI object's descriptions.
+   * `wmiexec.py`: agent-less, semi-interactive shell using WMI.
+   * `smbserver.py`: quick an easy way to share files using the SMB protocol.
+
+
+## Impacket v0.9.11 (February 2014):
+
+1. Library improvements
+   * New RPC and NDR runtime (located at `impacket.dcerpc.v5`, old one still available)
+       * Support marshaling/unmarshaling for NDR20 and NDR64 (experimental)
+       * Support for `RPC_C_AUTHN_NETLOGON` (experimental)
+       * The following interface were developed based on its standard definition:
+           * `[MS-LSAD]` - Local Security Authority (Domain Policy) Remote Protocol (lsad.py)
+           * `[MS-LSAT]` - Local Security Authority (Translation Methods) Remote Protocol (lsat.py)
+           * `[MS-NRPC]` - Netlogon Remote Protocol (nrpc.py) 
+           * `[MS-RRP]` - Windows Remote Registry Protocol (rrp.py)
+           * `[MS-SAMR]` - Security Account Manager (SAM) Remote Protocol (samr.py)
+           * `[MS-SCMR]` - Service Control Manager Remote Protocol (scmr.py)
+           * `[MS-SRVS]` - Server Service Remote Protocol (srvs.py) 
+           * `[MS-WKST]` - Workstation Service Remote Protocol (wkst.py) 
+           * `[MS-RPCE]-C706` -  Remote Procedure Call Protocol Extensions (epm.py)
+           * `[MS-DTYP]` - Windows Data Types (dtypes.py)
+       * Most of the DCE Calls have helper functions for easier use. Test cases added for 
+         all calls (check the test cases directory)
+   * ESE parser (Extensive Storage Engine) (ese.py)
+   * Windows Registry parser (winregistry.py)
+   * TDS protocol now supports SSL, can be used from mssqlclient
+   * Support for EAPOL, EAP and WPS decoders
+   * VLAN tagging (IEEE 802.1Q and 802.1ad) support for ImpactPacket, done by dan.pisi
+
+2. New examples
+  * `rdp_check.py`: tests whether an account (pwd or hashes) is valid against an RDP server
+  * `esentutl.py`: ESE example to show how to interact with ESE databases (e.g. NTDS.dit)
+  * `ntfs-read.py`: mini shell for browsing an NTFS volume
+  * `registry-read.py`: Windows offline registry reader
+  * `secretsdump.py`: agent-less remote windows secrets dump (SAM, LSA, CDC, NTDS)
+
+
+## Impacket v0.9.10 (March 2013):
+
+1. Library improvements
+   * SMB version 2 and 3 protocol support (`[MS-SMB2]`). Signing supported, encryption for
+     SMB3 still pending.
+   * Added a SMBConnection layer on top of each SMB specific protocol. Much simpler and
+     SMB version independent. It will pick the best SMB Version when connecting against the
+     target. Check `smbconnection.py` for a list of available methods across all the protocols.
+   * Partial TDS implementation (`[MS-TDS]` & `[MC-SQLR]`) so we could talk with MSSQL Servers.
+   * Unicode support for the smbserver. Newer OSX won't connect to a non unicode SMB Server.
+   * DCERPC Endpoints' new calls
+     * EPM: `lookup()`: It can work as a general portmapper, or just to find specific interfaces/objects.
+
+2. New examples
+    * `mssqlclient.py`: A MS SQL client, allowing to do MS SQL or Windows Authentication (accepts hashes) and then gives
+      you an SQL prompt for your pleasure.
+    * `mssqlinstance.py`: Lists the MS SQL instances running on a target machine.
+    * `rpcdump.py`: Output changed. Hopefully more useful. Parsed all the Windows Protocol Specification looking for the
+      UUIDs used and that information is included as well. This could be helpful when reading a portmap output and to
+      develop new functionality to interact against a target interface.
+    * `smbexec.py`: Another alternative to psexec. Less capabilities but might work on tight AV environments. Based on the
+      technique described at https://web.archive.org/web/20190515131124/https://www.optiv.com/blog/owning-computers-without-shell-access. It also
+      supports instantiating a local smbserver to receive the output of the commandos executed for those situations
+      where no share is available on the other end.
+    * `smbrelayx.py`: It now also listens on port 80 and forwards/reflects the credentials accordingly.
+
+And finally tons of fixes :).
+
+
+## Impacket v0.9.9 (July 2012):
+
+1. Library improvements
+   * Added 802.11 packets encoding/decoding
+   * Addition of support for IP6, ICMP6 and NDP packets. Addition of `IP6_Address` helper class.
+   * SMB/DCERPC:
+     * GSS-API/SPNEGO Support.
+     * SPN support in auth blob.
+     * NTLM2 and NTLMv2 support. 
+     * Default SMB port now 445. If `*SMBSERVER` is specified the library will try to resolve the netbios name.
+     * Pass the hash supported for SMB/DCE-RPC.
+     * IPv6 support for SMB/NMB/DCERPC.
+     * DOMAIN support for authentication. 
+     * SMB signing support when server enforces it.
+     * DCERPC signing/sealing for all NTLM flavours.
+     * DCERPC transport now accepts an already established SMB connection.
+     * Basic SMBServer implementation in Python. It allows third-party DCE-RPC servers to handle DCERPC Request (by
+       forwarding named pipes requests).
+     * Minimalistic SRVSVC dcerpc server to be used by SMBServer in order to avoid Windows 7 nasty bug when that pipe's
+       not functional.
+   * DCERPC Endpoints' new calls:
+       * `SRVSVC`: `NetrShareEnum(Level1)`, `NetrShareGetInfo(Level2)`, `NetrServerGetInfo(Level2)`,
+         `NetrRemoteTOD()`, `NetprNameCanonicalize()`.
+       * `SVCCTL`: `CloseServiceHandle()`, `OpenSCManagerW()`, `CreateServiceW()`, `StartServiceW()`,
+         `OpenServiceW()`, `OpenServiceA()`, `StopService()`, `DeleteService()`, `EnumServicesStatusW()`,
+         `QueryServiceStatus()`, `QueryServiceConfigW()`.
+       * `WKSSVC`: `NetrWkstaTransportEnum()`.
+       * `SAMR`: `OpenAlias()`, `GetMembersInAlias()`.
+       * `LSARPC`: `LsarOpenPolicy2()`, `LsarLookupSids()`, `LsarClose()`.
+
+2. New examples
+    * `ifmap.py`: First, this binds to the MGMT interface and gets a list of interface IDs. It adds to this a large list
+      of interface UUIDs seen in the wild. It then tries to bind to each interface and reports whether the interface is
+      listed and/or listening.
+    * `lookupsid.py`: DCE/RPC lookup sid brute forcer example.
+    * `opdump.py`: This binds to the given hostname:port and DCERPC interface. Then, it tries to call each of the first
+      256 operation numbers in turn and reports the outcome of each call.
+    * `services.py`: SVCCTL services common functions for manipulating services (START/STOP/DELETE/STATUS/CONFIG/LIST).
+    * `test_wkssvc`: DCE/RPC WKSSVC examples, playing with the functions Implemented.
+    * `smbrelayx`: Passes credentials to a third party server when doing MiTM.
+    * `smbserver`: Multiprocess/threading smbserver supporting common file server functions. Authentication all done but
+      not enforced. Tested under Windows, Linux and MacOS clients.
+    * `smbclient.py`: now supports history, new commands also added.
+    * `psexec.py`: Execute remote commands on Windows machines
