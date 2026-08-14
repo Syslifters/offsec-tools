@@ -1,0 +1,1194 @@
+# Impacket - Collection of Python classes for working with network protocols.
+#
+# Copyright Fortra, LLC and its affiliated companies 
+#
+# All rights reserved.
+#
+# This software is provided under a slightly modified version
+# of the Apache Software License. See the accompanying LICENSE file
+# for more information.
+#
+# Description:
+#   Mini shell using some of the SMB funcionality of the library
+#
+# Author:
+#   Alberto Solino (@agsolino)
+#
+# Reference for:
+#   SMB DCE/RPC
+#
+from __future__ import division
+from __future__ import print_function
+from io import BytesIO
+import sys
+import time
+import cmd
+import os
+import ntpath
+
+from six import PY2
+from impacket.dcerpc.v5 import samr, transport, srvs
+from impacket.dcerpc.v5.dtypes import NULL
+from impacket import LOG
+from impacket.smbconnection import SMBConnection, SMB2_DIALECT_002, SMB2_DIALECT_21, SMB_DIALECT, SessionError, \
+    FILE_READ_DATA, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_DELETE
+from impacket.smb3structs import FILE_DIRECTORY_FILE, FILE_LIST_DIRECTORY
+from impacket.acl import SMBFileACL
+from impacket.nt_errors import STATUS_PATH_NOT_COVERED
+
+import charset_normalizer as chardet
+
+
+class MiniImpacketShell(cmd.Cmd):
+    def __init__(self, smbClient, tcpShell=None, outputfile=None, dfs_auto_follow=False):
+        #If the tcpShell parameter is passed (used in ntlmrelayx),
+        # all input and output is redirected to a tcp socket
+        # instead of to stdin / stdout
+        if tcpShell is not None:
+            cmd.Cmd.__init__(self, stdin=tcpShell.stdin, stdout=tcpShell.stdout)
+            sys.stdout = tcpShell.stdout
+            sys.stdin = tcpShell.stdin
+            sys.stderr = tcpShell.stdout
+            self.use_rawinput = False
+            self.shell = tcpShell
+        else:
+            cmd.Cmd.__init__(self)
+            self.shell = None
+
+        self.prompt = '# '
+        self.smb = smbClient
+        self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey, self.TGT, self.TGS = smbClient.getCredentials()
+        self.tid = None
+        self.intro = 'Type help for list of commands'
+        self.pwd = ''
+        self.share = None
+        self.loggedIn = True
+        self.last_output = None
+        self.completion = []
+        self.outputfile = outputfile
+        self.use_kerberos = smbClient.getSMBServer().getKerberos() if hasattr(smbClient.getSMBServer(), 'getKerberos') else False
+        self.kdcHost = getattr(smbClient, '_kdcHost', None)
+        # DFS support
+        self.dfs_auto_follow = dfs_auto_follow
+        self.dfs_connections = {}
+        self.dfs_referral_cache = {}
+        self.dfs_context_stack = []  # Stack of {smb, tid, share, pwd, dfs_target_info}
+        self.dfs_target_info = None
+
+    @property
+    def is_dfs_context(self):
+        return len(self.dfs_context_stack) > 0
+
+    def emptyline(self):
+        pass
+
+    def precmd(self,line):
+        # switch to unicode
+        if self.outputfile is not None:
+            f = open(self.outputfile, 'a')
+            f.write('> ' + line + "\n")
+            f.close()
+        if PY2:
+            return line.decode('utf-8')
+        return line
+
+    def onecmd(self,s):
+        retVal = False
+        try:
+           retVal = cmd.Cmd.onecmd(self,s)
+        except Exception as e:
+           LOG.error(e)
+           LOG.debug('Exception info', exc_info=True)
+
+        return retVal
+
+    def do_exit(self,line):
+        if self.shell is not None:
+            self.shell.close()
+        return True
+
+    def do_shell(self, line):
+        output = os.popen(line).read()
+        print(output)
+        self.last_output = output
+
+    def do_help(self,line):
+        print("""
+ open {host,port=445} - opens a SMB connection against the target host/port
+ reconnect - reconnect connection, useful for broken pipes & interrupted sessions
+ login {domain/username,passwd} - logs into the current SMB connection, no parameters for NULL connection. If no password specified, it'll be prompted
+ kerberos_login {domain/username,passwd} - logs into the current SMB connection using Kerberos. If no password specified, it'll be prompted. Use the DNS resolvable domain name
+ login_hash {domain/username,lmhash:nthash} - logs into the current SMB connection using the password hashes
+ logoff - logs off
+ shares - list available shares
+ use {sharename} - connect to an specific share
+ cd {path} - changes the current directory to {path}
+ lcd {path} - changes the current local directory to {path}
+ pwd - shows current remote directory
+ password - changes the user password, the new password will be prompted for input
+ ls {wildcard} - lists all the files in the current directory
+ lls {dirname} - lists all the files on the local filesystem.
+ tree {filepath} - recursively lists all files in folder and sub folders
+ rm {file} - removes the selected file
+ mkdir {dirname} - creates the directory under the current path
+ rmdir {dirname} - removes the directory under the current path
+ put {filename} - uploads the filename into the current path
+ get {filename} - downloads the filename from the current path
+ mget {mask} - downloads all files from the current directory matching the provided mask
+ rget {mask} - recursively downloads all files from the current directory and subdirectories matching the provided mask
+ cat {filename} - reads the filename from the current path
+ mount {target,path} - creates a mount point from {path} to {target} (admin required)
+ umount {path} - removes the mount point at {path} without deleting the directory (admin required)
+ list_snapshots {path} - lists the vss snapshots for the specified path
+ info - returns NetrServerInfo main results
+ who - returns the sessions currently connected at the target host (admin required)
+ acl {filename,action,permissions,user/group} - displays or modifies file ACLs
+ dfs_info {path} - shows DFS referral info for the specified path (or current directory), shows all targets
+ dfs_mode {on|off} - toggle DFS auto-follow mode (creates new SMB connections to DFS targets, disabled by default for OPSEC)
+ close - closes the current SMB Session
+ NOTE: DFS support includes nested DFS links (arbitrary depth), multi-target failover, and connection health checks.
+ exit - terminates the server process (and this session)
+
+""")
+
+    def do_password(self, line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        from getpass import getpass
+        newPassword = getpass("New Password:")
+        rpctransport = transport.SMBTransport(self.smb.getRemoteHost(), filename = r'\samr', smb_connection = self.smb)
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+        dce.bind(samr.MSRPC_UUID_SAMR)
+        samr.hSamrUnicodeChangePasswordUser2(dce, '\x00', self.username, self.password, newPassword, self.lmhash, self.nthash)
+        self.password = newPassword
+        self.lmhash = None
+        self.nthash = None
+
+    def do_open(self,line):
+        l = line.split(' ')
+        port = 445
+        if len(l) > 0:
+           host = l[0]
+        if len(l) > 1:
+           port = int(l[1])
+
+
+        if port == 139:
+            self.smb = SMBConnection('*SMBSERVER', host, sess_port=port)
+        else:
+            self.smb = SMBConnection(host, host, sess_port=port)
+
+        dialect = self.smb.getDialect()
+        if dialect == SMB_DIALECT:
+            LOG.info("SMBv1 dialect used")
+        elif dialect == SMB2_DIALECT_002:
+            LOG.info("SMBv2.0 dialect used")
+        elif dialect == SMB2_DIALECT_21:
+            LOG.info("SMBv2.1 dialect used")
+        else:
+            LOG.info("SMBv3.0 dialect used")
+
+        self.share = None
+        self.tid = None
+        self.pwd = ''
+        self.loggedIn = False
+        self.password = None
+        self.lmhash = None
+        self.nthash = None
+        self.username = None
+
+    def do_reconnect(self, line):
+        if self.smb:
+            self.smb.reconnect()
+        else:
+            LOG.warning("Not reconnecting a closed connection.")
+    
+    def do_login(self,line):
+        if self.smb is None:
+            LOG.error("No connection open")
+            return
+        l = line.split(' ')
+        username = ''
+        password = ''
+        domain = ''
+        if len(l) > 0:
+           username = l[0]
+        if len(l) > 1:
+           password = l[1]
+
+        if username.find('/') > 0:
+           domain, username = username.split('/')
+
+        if password == '' and username != '':
+            from getpass import getpass
+            password = getpass("Password:")
+
+        self.smb.login(username, password, domain=domain)
+        self.password = password
+        self.username = username
+
+        if self.smb.isGuestSession() > 0:
+            LOG.info("GUEST Session Granted")
+        else:
+            LOG.info("USER Session Granted")
+        self.loggedIn = True
+
+    def do_kerberos_login(self,line):
+        if self.smb is None:
+            LOG.error("No connection open")
+            return
+        l = line.split(' ')
+        username = ''
+        password = ''
+        domain = ''
+        if len(l) > 0:
+           username = l[0]
+        if len(l) > 1:
+           password = l[1]
+
+        if username.find('/') > 0:
+           domain, username = username.split('/')
+
+        if domain == '':
+            LOG.error("Domain must be specified for Kerberos login")
+            return
+
+        if password == '' and username != '':
+            from getpass import getpass
+            password = getpass("Password:")
+
+        self.smb.kerberosLogin(username, password, domain=domain)
+        self.password = password
+        self.username = username
+
+        if self.smb.isGuestSession() > 0:
+            LOG.info("GUEST Session Granted")
+        else:
+            LOG.info("USER Session Granted")
+        self.loggedIn = True
+
+    def do_login_hash(self,line):
+        if self.smb is None:
+            LOG.error("No connection open")
+            return
+        l = line.split(' ')
+        domain = ''
+        if len(l) > 0:
+           username = l[0]
+        if len(l) > 1:
+           hashes = l[1]
+        else:
+           LOG.error("Hashes needed. Format is lmhash:nthash")
+           return
+
+        if username.find('/') > 0:
+           domain, username = username.split('/')
+
+        lmhash, nthash = hashes.split(':')
+
+        self.smb.login(username, '', domain,lmhash=lmhash, nthash=nthash)
+        self.username = username
+        self.lmhash = lmhash
+        self.nthash = nthash
+
+        if self.smb.isGuestSession() > 0:
+            LOG.info("GUEST Session Granted")
+        else:
+            LOG.info("USER Session Granted")
+        self.loggedIn = True
+
+    def do_logoff(self, line):
+        if self.smb is None:
+            LOG.error("No connection open")
+            return
+        self._reset_dfs_state()
+        self.smb.logoff()
+        del self.smb
+        self.share = None
+        self.smb = None
+        self.tid = None
+        self.pwd = ''
+        self.loggedIn = False
+        self.password = None
+        self.lmhash = None
+        self.nthash = None
+        self.username = None
+
+    def do_info(self, line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        rpctransport = transport.SMBTransport(self.smb.getRemoteHost(), filename = r'\srvsvc', smb_connection = self.smb)
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+        dce.bind(srvs.MSRPC_UUID_SRVS)
+        resp = srvs.hNetrServerGetInfo(dce, 102)
+
+        print("Version Major: %d" % resp['InfoStruct']['ServerInfo102']['sv102_version_major'])
+        print("Version Minor: %d" % resp['InfoStruct']['ServerInfo102']['sv102_version_minor'])
+        print("Server Name: %s" % resp['InfoStruct']['ServerInfo102']['sv102_name'])
+        print("Server Comment: %s" % resp['InfoStruct']['ServerInfo102']['sv102_comment'])
+        print("Server UserPath: %s" % resp['InfoStruct']['ServerInfo102']['sv102_userpath'])
+        print("Simultaneous Users: %d" % resp['InfoStruct']['ServerInfo102']['sv102_users'])
+
+    def do_who(self, line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        rpctransport = transport.SMBTransport(self.smb.getRemoteHost(), filename = r'\srvsvc', smb_connection = self.smb)
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+        dce.bind(srvs.MSRPC_UUID_SRVS)
+        resp = srvs.hNetrSessionEnum(dce, NULL, NULL, 10)
+
+        for session in resp['InfoStruct']['SessionInfo']['Level10']['Buffer']:
+            print("host: %15s, user: %5s, active: %5d, idle: %5d" % (
+            session['sesi10_cname'][:-1], session['sesi10_username'][:-1], session['sesi10_time'],
+            session['sesi10_idle_time']))
+
+    def _resolve_share_type(self, type_int):
+        attributes = []
+        if type_int & srvs.STYPE_SPECIAL:
+            attributes.append("SPECIAL")
+            type_int ^= srvs.STYPE_SPECIAL
+        if type_int & srvs.STYPE_TEMPORARY:
+            attributes.append("TEMP")
+            type_int ^= srvs.STYPE_TEMPORARY
+        type_str = "UNKNOWN"
+        if type_int == srvs.STYPE_DISKTREE:
+            type_str = "DISK"
+        elif type_int == srvs.STYPE_PRINTQ:
+            type_str = "PRINT"
+        elif type_int == srvs.STYPE_DEVICE:
+            type_str = "DEVICE"
+        elif type_int == srvs.STYPE_IPC:
+            type_str = "IPC"
+        if attributes:
+            return f"{type_str} ({','.join(attributes)})"
+        return type_str
+
+    def do_shares(self, line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        resp = self.smb.listShares()
+        fmt = "{:<25} {:<15} {}"
+        print(fmt.format("Share Name", "Type", "Comment"))
+        print("-" * 70)
+        if self.outputfile is not None:
+            f = open(self.outputfile, 'a')
+        for i in range(len(resp)):
+            share_name = resp[i]['shi1_netname'][:-1]
+            share_remark = resp[i]['shi1_remark'][:-1]
+            share_type_int = resp[i]['shi1_type']
+            share_type = self._resolve_share_type(share_type_int)
+            if self.outputfile:
+                f.write(f"{share_name}|{share_type}|{share_remark}\n")
+            print(fmt.format(share_name, share_type, share_remark))
+        if self.outputfile:
+            f.close()
+
+    def do_use(self,line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        self._reset_dfs_state()
+        self.share = line
+        self.tid = self.smb.connectTree(line)
+        self.pwd = '\\'
+        self.do_ls('', False)
+
+    def complete_cd(self, text, line, begidx, endidx):
+        return self.complete_get(text, line, begidx, endidx, include = 2)
+
+    def do_cd(self, line):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        if not line or not line.strip():
+            return
+
+        p = line.replace('/', '\\')
+        oldpwd = self.pwd
+
+        # DFS boundary detection — must happen BEFORE normpath which clips above-root paths
+        if self.is_dfs_context:
+            resolved, escaped, remaining = self._resolve_path_with_dfs_boundary(line)
+            if escaped:
+                self._restore_original_connection()
+                # If there are remaining forward components, navigate them in parent context
+                if remaining:
+                    self.do_cd('\\'.join(remaining))
+                return
+            self.pwd = resolved
+        else:
+            # Non-DFS: standard path resolution
+            if p[0] == '\\':
+                self.pwd = line
+            else:
+                self.pwd = ntpath.join(self.pwd, line)
+            self.pwd = ntpath.normpath(self.pwd)
+
+        # Let's try to open the directory to see if it's valid
+        try:
+            fid = self.smb.openFile(self.tid, self.pwd, creationOption = FILE_DIRECTORY_FILE, desiredAccess = FILE_READ_DATA |
+                                   FILE_LIST_DIRECTORY, shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE )
+            self.smb.closeFile(self.tid,fid)
+        except SessionError as e:
+            if e.getErrorCode() == STATUS_PATH_NOT_COVERED:
+                # DFS link detected
+                if not self.dfs_auto_follow:
+                    # OPSEC: don't create new connections, just show referral info
+                    self.pwd = oldpwd
+                    try:
+                        smb_conn, share = self._get_dfs_root_context()
+                        dfs_path_full = '\\\\%s\\%s\\%s' % (smb_conn.getRemoteHost(), share, ntpath.normpath(ntpath.join(oldpwd, line)).lstrip('\\'))
+                        referrals = smb_conn.getDFSReferral(dfs_path_full)
+                        if referrals:
+                            LOG.warning("DFS link detected but auto-follow is disabled (OPSEC)")
+                            print("  DFS Path: %s" % dfs_path_full)
+                            print("  Targets:")
+                            for i, ref in enumerate(referrals):
+                                print("    [%d] %s (%s)" % (i, ref['network_address'],
+                                      "Root" if ref['server_type'] == 1 else "Link"))
+                            print("  Use 'dfs_mode on' or restart with '-dfs-follow' to enable auto-follow")
+                        else:
+                            LOG.warning("DFS link detected but no referrals returned. Auto-follow is disabled (OPSEC)")
+                    except Exception as dfs_err:
+                        LOG.warning("DFS link detected but auto-follow is disabled (OPSEC). Referral lookup failed: %s" % str(dfs_err))
+                    return
+                # Auto-follow enabled - resolve and follow
+                try:
+                    self._follow_dfs_link(self.pwd)
+                    return
+                except Exception as dfs_error:
+                    self.pwd = oldpwd
+                    LOG.error("DFS resolution failed: %s" % str(dfs_error))
+                    return
+            self.pwd = oldpwd
+            raise
+
+    def do_lcd(self, s):
+        print(s)
+        if s == '':
+           print(os.getcwd())
+        else:
+           os.chdir(s)
+
+    def do_ls(self, wildcard, display = True):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        if wildcard == '':
+           pwd = ntpath.join(self.pwd,'*')
+        else:
+           pwd = ntpath.join(self.pwd, wildcard)
+        self.completion = []
+        pwd = pwd.replace('/','\\')
+        pwd = ntpath.normpath(pwd)
+        if self.outputfile is not None:
+            of = open(self.outputfile, 'a')
+        is_dfs = self._is_dfs_share()
+        for f in self.smb.listPath(self.share, pwd):
+            if display is True:
+                dfs_marker = ''
+                if is_dfs and f.is_directory() and f.is_reparse_point() and f.get_longname() not in ('.', '..'):
+                    dfs_marker = ' [DFS]'
+                if self.outputfile:
+                    of.write("%crw-rw-rw- %10d  %s %s%s" % (
+                    'd' if f.is_directory() > 0 else '-', f.get_filesize(), time.ctime(float(f.get_mtime_epoch())),
+                    f.get_longname(), dfs_marker) + "\n")
+
+                print("%crw-rw-rw- %10d  %s %s%s" % (
+                'd' if f.is_directory() > 0 else '-', f.get_filesize(), time.ctime(float(f.get_mtime_epoch())),
+                f.get_longname(), dfs_marker))
+            self.completion.append((f.get_longname(), f.is_directory()))
+        if self.outputfile:
+            of.close()
+    
+    def do_lls(self, currentDir):
+        if currentDir == "":
+            currentDir = "./"
+        else:
+            pass
+        for LINE in os.listdir(currentDir):
+            print(LINE)
+
+    def do_listFiles(self, share, ip):
+        retList = []
+        retFiles = []
+        retInt = 0
+        try:                
+            for LINE in self.smb.listPath(self.share, ip):
+                if(LINE.get_longname() == "." or LINE.get_longname() == ".."):
+                    pass
+                else:
+                    retInt = retInt + 1
+                    print(ip.strip("*").replace("//","/") + LINE.get_longname())
+                    if(LINE.is_directory()):
+                        retval = ip.strip("*").replace("//","/") + LINE.get_longname()
+                        retList.append(retval)
+                    else:
+                        retval = ip.strip("*").replace("//","/") + LINE.get_longname()
+                        retFiles.append(retval)
+        except:
+            pass
+        return retList,retFiles,retInt
+
+    def do_tree(self, filepath):
+        folderList = []
+        retList = []
+        totalFilesRead = 0
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+
+        filepath = filepath.replace("\\", "/")
+        if not filepath.startswith("/"):
+            filepath = self.pwd.replace("\\", "/")  + "/" + filepath
+        if(not filepath.endswith("/*")):
+            filepath = filepath + "/*"
+        filepath = os.path.abspath(filepath).replace("//","/")
+
+        for LINE in self.smb.listPath(self.share, filepath):
+            if(LINE.is_directory()):
+                if(LINE.get_longname() == "." or LINE.get_longname() == ".."):
+                    pass
+                else:
+                    totalFilesRead = totalFilesRead + 1 
+                    folderList.append(filepath.strip("*") + LINE.get_longname())
+            else:
+                print(filepath.strip("*") + LINE.get_longname())
+        for ITEM in folderList:
+            ITEM = ITEM + "/*"
+            try: 
+                retList, retFiles, retInt = self.do_listFiles(self.share,ITEM)
+                for q in retList:
+                    folderList.append(q)
+                totalFilesRead = totalFilesRead + retInt
+            except:
+                pass
+        print("Finished - " + str(totalFilesRead) + " files and folders")
+
+    def do_rm(self, filename):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        f = ntpath.join(self.pwd, filename)
+        file = f.replace('/','\\')
+        self.smb.deleteFile(self.share, file)
+
+    def do_mkdir(self, path):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        p = ntpath.join(self.pwd, path)
+        pathname = p.replace('/','\\')
+        self.smb.createDirectory(self.share,pathname)
+
+    def do_rmdir(self, path):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        p = ntpath.join(self.pwd, path)
+        pathname = p.replace('/','\\')
+        self.smb.deleteDirectory(self.share, pathname)
+
+    def do_put(self, pathname):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        src_path = pathname
+        dst_name = os.path.basename(src_path)
+
+        fh = open(pathname, 'rb')
+        f = ntpath.join(self.pwd,dst_name)
+        finalpath = f.replace('/','\\')
+        self.smb.putFile(self.share, finalpath, fh.read)
+        fh.close()
+
+    def complete_get(self, text, line, begidx, endidx, include = 1):
+        # include means
+        # 1 just files
+        # 2 just directories
+        p = line.replace('/','\\')
+        if p.find('\\') < 0:
+            items = []
+            if include == 1:
+                mask = 0
+            else:
+                mask = 0x010
+            for i in self.completion:
+                if i[1] == mask:
+                    items.append(i[0])
+            if text:
+                return  [
+                    item for item in items
+                    if item.upper().startswith(text.upper())
+                ]
+            else:
+                return items
+
+    def do_mget(self, mask):
+        if mask == '':
+            LOG.error("A mask must be provided")
+            return
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        self.do_ls(mask,display=False)
+        if len(self.completion) == 0:
+            LOG.error("No files found matching the provided mask")
+            return 
+        for file_tuple in self.completion:
+            if file_tuple[1] == 0:
+                filename = file_tuple[0]
+                filename = filename.replace('/', '\\')
+                fh = open(ntpath.basename(filename), 'wb')
+                pathname = ntpath.join(self.pwd, filename)
+                try:
+                    LOG.info("Downloading %s" % (filename))
+                    self.smb.getFileEx(self.share, pathname, fh.write)
+                except:
+                    fh.close()
+                    os.remove(filename)
+                    raise
+                fh.close()
+
+    def do_rget(self, mask):
+        if mask == '':
+            mask = '*'
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+
+        root_pwd = self.pwd
+        folderList = [root_pwd]
+
+        for ITEM in folderList:
+            self.pwd = ITEM
+
+            try:
+                self.do_ls('*', display=False)
+
+                for file_tuple in self.completion:
+                    filename = file_tuple[0]
+                    is_directory = file_tuple[1]
+
+                    if filename in ['.', '..']:
+                        continue
+
+                    if is_directory:
+                        folderList.append(ntpath.join(ITEM, filename))
+
+                self.do_ls(mask, display=False)
+
+                for file_tuple in self.completion:
+                    filename = file_tuple[0]
+                    is_directory = file_tuple[1]
+
+                    if filename in ['.', '..'] or is_directory:
+                        continue
+
+                    filename = filename.replace('/', '\\')
+                    local_path = ntpath.relpath(ITEM, root_pwd)
+                    if local_path == '.':
+                        local_path = ''
+                    local_path = local_path.replace('\\', os.sep)
+                    local_file = os.path.join(local_path, ntpath.basename(filename)) if local_path else ntpath.basename(filename)
+                    local_dir = os.path.dirname(local_file)
+
+                    if local_dir and not os.path.exists(local_dir):
+                        os.makedirs(local_dir)
+
+                    fh = open(local_file, 'wb')
+                    pathname = ntpath.join(ITEM, filename)
+                    try:
+                        LOG.info("Downloading %s" % local_file)
+                        self.smb.getFileEx(self.share, pathname, fh.write)
+                    except:
+                        fh.close()
+                        os.remove(local_file)
+                        raise
+                    fh.close()
+            finally:
+                self.pwd = root_pwd
+
+    def do_get(self, filename):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        filename = filename.replace('/','\\')
+        fh = open(ntpath.basename(filename),'wb')
+        pathname = ntpath.join(self.pwd,filename)
+        try:
+            self.smb.getFileEx(self.share, pathname, fh.write)
+        except:
+            fh.close()
+            os.remove(filename)
+            raise
+        fh.close()
+
+    def complete_cat(self, text, line, begidx, endidx):
+        return self.complete_get(text, line, begidx, endidx, include=1)
+    
+    def do_cat(self, filename):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        filename = filename.replace('/','\\')
+        fh = BytesIO()
+        pathname = ntpath.join(self.pwd,filename)
+        try:
+            self.smb.getFileEx(self.share, pathname, fh.write)
+        except:
+            raise
+        output = fh.getvalue()
+        encoding = chardet.detect(output)["encoding"]
+        error_msg = "[-] Output cannot be correctly decoded, are you sure the text is readable ?"
+        if self.outputfile is not None:
+            f = open(self.outputfile, 'a')
+        if encoding:
+            try:
+                if self.outputfile:
+                    f.write(output.decode(encoding) + '\n')
+                    f.close()
+                print(output.decode(encoding))
+            except:
+                if self.outputfile:
+                    f.write(error_msg + '\n')
+                    f.close()
+                print(error_msg)
+            finally:
+                fh.close()
+        else:
+            if self.outputfile:
+                f.write(error_msg + '\n')
+                f.close()
+            print(error_msg)
+            fh.close()
+
+    def do_close(self, line):
+        self.do_logoff(line)
+
+    def do_list_snapshots(self, line):
+        l = line.split(' ')
+        if len(l) > 0:
+            pathName= l[0].replace('/','\\')
+
+        # Relative or absolute path?
+        if pathName.startswith('\\') is not True:
+            pathName = ntpath.join(self.pwd, pathName)
+
+        snapshotList = self.smb.listSnapshots(self.tid, pathName)
+
+        if not snapshotList:
+            print("No snapshots found")
+            return
+
+        for timestamp in snapshotList:
+            print(timestamp)
+
+    def do_mount(self, line):
+        l = line.split(' ')
+        if len(l) > 1:
+            target  = l[0].replace('/','\\')
+            pathName= l[1].replace('/','\\')
+
+        # Relative or absolute path?
+        if pathName.startswith('\\') is not True:
+            pathName = ntpath.join(self.pwd, pathName)
+
+        self.smb.createMountPoint(self.tid, pathName, target)
+
+    def do_umount(self, mountpoint):
+        mountpoint = mountpoint.replace('/','\\')
+
+
+        # Relative or absolute path?
+        if mountpoint.startswith('\\') is not True:
+            mountpoint = ntpath.join(self.pwd, mountpoint)
+
+        mountPath = ntpath.join(self.pwd, mountpoint)
+
+        self.smb.removeMountPoint(self.tid, mountPath)
+
+    def do_acl(self, line):
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+        parts = line.split()
+        if len(parts) == 0:
+            LOG.error("Usage: acl {filename,action,permissions,user/group} actions: grant/revoke, "
+                      "supported permissions : R/W/D/X/F")
+            return
+        
+        filename = parts[0].replace('/','\\')
+        # Relative or absolute path?
+        if filename.startswith('\\') is not True:
+            filename = ntpath.join(self.pwd, filename)
+        
+        smb_file_acl = None
+
+        try:
+            if len(parts) == 1:
+                smb_file_acl = SMBFileACL(smb_connection=self.smb)
+                resp = smb_file_acl.get_permissions(self.share, filename)
+                print(resp)
+            else:
+                action = parts[1].lower()
+
+                if action not in ['grant', 'revoke']:
+                    LOG.error("Action must be 'grant' or 'revoke'")
+                    return
+
+                if len(parts) < 3:
+                    LOG.error("Permissions required. Supported: R (read), W (write), D (delete), X (execute), F (full control)")
+                    return
+
+                permissions = parts[2]
+
+                if len(parts) < 4:
+                    LOG.error("User/group name is required")
+                    return
+
+                user = parts[3]
+
+                smb_file_acl = SMBFileACL(smb_connection=self.smb)
+                smb_file_acl.set_permissions(self.share, filename, user, permissions, action)
+                if action == 'grant':
+                    print("Successfully granted permissions to %s" % user)
+                elif action == 'revoke':
+                    print("Successfully revoked permissions from %s" % user)
+        finally:
+            if smb_file_acl:
+                smb_file_acl.close_connection()
+
+    def _is_dfs_share(self):
+        """Check if the current share has DFS capability."""
+        if self.tid is None or self.smb is None:
+            return False
+        try:
+            smb_inner = self.smb.getSMBServer()
+            if hasattr(smb_inner, '_Session') and self.tid in smb_inner._Session.get('TreeConnectTable', {}):
+                return smb_inner._Session['TreeConnectTable'][self.tid].get('IsDfsShare', False)
+        except Exception:
+            pass
+        return False
+
+    def _resolve_path_with_dfs_boundary(self, line):
+        """Resolve a relative path, detecting if it crosses the DFS root boundary.
+
+        Returns:
+            (resolved_path, escaped, remaining_parts_after_escape)
+            - resolved_path: the normalized path within DFS target (only valid if escaped=False)
+            - escaped: True if the path attempts to go above '\\' (DFS target root)
+            - remaining_parts_after_escape: path components remaining after the escape
+              (to be interpreted on the parent context)
+        """
+        p = line.replace('/', '\\')
+
+        if not p or p == '.':
+            return self.pwd, False, []
+
+        if p.startswith('\\'):
+            # Absolute path — stays within current DFS target context
+            return ntpath.normpath(p), False, []
+
+        # Relative path — walk components to detect boundary crossing
+        current_parts = [x for x in self.pwd.split('\\') if x]
+        path_parts = [x for x in p.split('\\') if x]
+
+        for i, part in enumerate(path_parts):
+            if part == '..':
+                if current_parts:
+                    current_parts.pop()
+                else:
+                    # Trying to go above root — boundary crossed
+                    remaining = path_parts[i + 1:]
+                    return None, True, remaining
+            elif part != '.':
+                current_parts.append(part)
+
+        resolved = '\\' + '\\'.join(current_parts) if current_parts else '\\'
+        return resolved, False, []
+
+    def _get_dfs_root_context(self):
+        """Return (smb_conn, share) for the DFS namespace root."""
+        if self.dfs_context_stack:
+            root = self.dfs_context_stack[0]
+            return root['smb'], root['share']
+        return self.smb, self.share
+
+    def _build_dfs_path(self, path=''):
+        """Build a full DFS UNC path for the current location."""
+        smb_conn, share = self._get_dfs_root_context()
+        server = smb_conn.getRemoteHost()
+        if path:
+            return '\\\\%s\\%s\\%s' % (server, share, path.lstrip('\\'))
+        else:
+            return '\\\\%s\\%s' % (server, share)
+
+    def _reset_dfs_state(self):
+        """Reset DFS state when switching shares or logging off."""
+        if self.dfs_context_stack:
+            # Restore to the very first (root) connection
+            root = self.dfs_context_stack[0]
+            self.smb = root['smb']
+            self.tid = root['tid']
+            self.share = root['share']
+        self.dfs_context_stack = []
+        self.dfs_target_info = None
+        self.dfs_referral_cache = {}
+        # Close cached DFS connections
+        for key, conn in self.dfs_connections.items():
+            try:
+                conn.logoff()
+            except Exception:
+                pass
+        self.dfs_connections = {}
+
+    def _push_dfs_context(self, pwd):
+        """Save the current connection state onto the DFS context stack."""
+        self.dfs_context_stack.append({
+            'smb': self.smb,
+            'tid': self.tid,
+            'share': self.share,
+            'pwd': pwd,
+            'dfs_target_info': self.dfs_target_info,
+        })
+
+    def _pop_dfs_context(self):
+        """Pop and restore the most recent DFS connection state from the stack."""
+        prev = self.dfs_context_stack.pop()
+        self.smb = prev['smb']
+        self.tid = prev['tid']
+        self.share = prev['share']
+        self.pwd = prev['pwd']
+        self.dfs_target_info = prev.get('dfs_target_info')
+
+    def _restore_original_connection(self):
+        """Restore previous connection when navigating out of a DFS link (pop from stack)."""
+        if not self.dfs_context_stack:
+            return
+        smb, share = self.smb.getRemoteHost(), self.share
+        self._pop_dfs_context()
+        LOG.info("Leaving DFS link \\\\%s\\%s, returning to \\\\%s\\%s" % (
+            smb, share, self.smb.getRemoteHost(), self.share))
+
+    def _follow_dfs_link(self, path):
+        """Resolve a DFS link and switch to the target connection.
+        Supports nested DFS (stack-based), multi-target failover, and connection health checks."""
+        # Build full DFS UNC path — try current server first (for nested DFS),
+        # fall back to root namespace server
+        dfs_path = '\\\\%s\\%s\\%s' % (self.smb.getRemoteHost(), self.share, path.lstrip('\\'))
+
+        # Check cache first
+        if dfs_path in self.dfs_referral_cache:
+            referrals = self.dfs_referral_cache[dfs_path]
+        else:
+            LOG.info("Resolving DFS path: %s" % dfs_path)
+            try:
+                referrals = self.smb.getDFSReferral(dfs_path)
+            except Exception:
+                # Fall back to root namespace server for nested DFS
+                if self.dfs_context_stack:
+                    root_smb, root_share = self._get_dfs_root_context()
+                    dfs_path = '\\\\%s\\%s\\%s' % (root_smb.getRemoteHost(), root_share, path.lstrip('\\'))
+                    LOG.info("Retrying DFS referral via root: %s" % dfs_path)
+                    referrals = root_smb.getDFSReferral(dfs_path)
+                else:
+                    raise
+            self.dfs_referral_cache[dfs_path] = referrals
+
+        if not referrals:
+            raise Exception("No DFS referrals returned for path: %s" % dfs_path)
+
+        # Multi-target failover: try all referral targets in order
+        last_error = None
+        save_pwd = ntpath.dirname(self.pwd) if self.pwd != '\\' else '\\'
+
+        for ref in referrals:
+            target_server = ref['target_server']
+            target_share = ref['target_share']
+            target_path = ref.get('target_path', '')
+
+            if not target_server or not target_share:
+                continue
+
+            LOG.info("DFS target: \\\\%s\\%s%s" % (target_server, target_share,
+                     ('\\' + target_path) if target_path else ''))
+
+            try:
+                # Get or create connection to target server
+                conn_key = target_server.lower()
+                target_smb = self.dfs_connections.get(conn_key)
+
+                # Health check: if cached connection exists, try connectTree
+                # If it fails, discard and recreate
+                target_tid = None
+                if target_smb is not None:
+                    try:
+                        target_tid = target_smb.connectTree(target_share)
+                    except Exception:
+                        LOG.debug("Cached DFS connection to %s is dead, reconnecting" % target_server)
+                        try:
+                            target_smb.logoff()
+                        except Exception:
+                            pass
+                        del self.dfs_connections[conn_key]
+                        target_smb = None
+
+                if target_smb is None:
+                    target_smb = SMBConnection(target_server, target_server, sess_port=445)
+                    if self.use_kerberos:
+                        target_smb.kerberosLogin(self.username, self.password, self.domain,
+                                                 self.lmhash, self.nthash, self.aesKey,
+                                                 kdcHost=self.kdcHost, TGT=self.TGT, TGS=None)
+                    else:
+                        target_smb.login(self.username, self.password, self.domain,
+                                         self.lmhash, self.nthash)
+                    self.dfs_connections[conn_key] = target_smb
+                    target_tid = target_smb.connectTree(target_share)
+
+                if target_path:
+                    try:
+                        probe_fid = target_smb.openFile(target_tid, '\\' + target_path,
+                                                        creationOption=FILE_DIRECTORY_FILE,
+                                                        desiredAccess=FILE_READ_DATA | FILE_LIST_DIRECTORY,
+                                                        shareMode=FILE_SHARE_READ | FILE_SHARE_WRITE)
+                        target_smb.closeFile(target_tid, probe_fid)
+                    except SessionError as e:
+                        if e.getErrorCode() != STATUS_PATH_NOT_COVERED:
+                            raise
+                        # Nested DFS link — push state, switch, and recurse
+                        base_depth = len(self.dfs_context_stack)
+                        self._push_dfs_context(save_pwd)
+                        self.smb = target_smb
+                        self.tid = target_tid
+                        self.share = target_share
+                        self.pwd = '\\' + target_path
+                        self.dfs_target_info = ref
+                        try:
+                            self._follow_dfs_link(self.pwd)
+                            if len(self.dfs_context_stack) > base_depth + 1:
+                                self.dfs_context_stack = self.dfs_context_stack[:base_depth + 1]
+                            return
+                        except Exception:
+                            while len(self.dfs_context_stack) > base_depth:
+                                self._pop_dfs_context()
+                            raise
+
+                # Push current state AFTER successful connectTree (so stack is not corrupted on error)
+                self._push_dfs_context(save_pwd)
+
+                # Switch to DFS target
+                self.smb = target_smb
+                self.tid = target_tid
+                self.share = target_share
+                self.pwd = '\\' + target_path if target_path else '\\'
+                self.dfs_target_info = ref
+                return  # Success
+
+            except Exception as e:
+                LOG.warning("DFS target \\\\%s\\%s failed: %s, trying next..." % (
+                    target_server, target_share, str(e)))
+                last_error = e
+                continue
+
+        raise Exception("All DFS targets failed for path: %s. Last error: %s" % (
+            dfs_path, str(last_error)))
+
+    def do_dfs_info(self, line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        if self.tid is None:
+            LOG.error("No share selected")
+            return
+
+        # Build DFS path — use root namespace context
+        smb_conn, share = self._get_dfs_root_context()
+
+        if line:
+            p = line.replace('/', '\\')
+            if not p.startswith('\\'):
+                p = ntpath.join(self.pwd, p)
+            p = ntpath.normpath(p)
+        else:
+            p = self.pwd
+
+        dfs_path = '\\\\%s\\%s\\%s' % (smb_conn.getRemoteHost(), share, p.lstrip('\\'))
+
+        try:
+            referrals = smb_conn.getDFSReferral(dfs_path)
+        except SessionError as e:
+            LOG.error("Failed to get DFS referral: %s" % str(e))
+            return
+
+        if not referrals:
+            print("No DFS referrals found for: %s" % dfs_path)
+            return
+
+        print("DFS Path: %s" % dfs_path)
+        print("Referrals:")
+        for i, ref in enumerate(referrals):
+            server_type = "Root" if ref['server_type'] == 1 else "Link"
+            print("  [%d] Type: %s" % (i, server_type))
+            print("      Target: %s" % ref['network_address'])
+            if ref['target_path']:
+                print("      Path: %s" % ref['target_path'])
+            print("      TTL: %d seconds" % ref['ttl'])
+
+    def do_dfs_mode(self, line):
+        """Toggle or display DFS auto-follow mode. Usage: dfs_mode [on|off]"""
+        line = line.strip().lower()
+        if line == '':
+            status = 'ON' if self.dfs_auto_follow else 'OFF'
+            print("DFS auto-follow is currently %s" % status)
+            if not self.dfs_auto_follow:
+                print("  Use 'dfs_mode on' to enable automatic DFS link following (creates new SMB connections)")
+                print("  Or use '-dfs-follow' CLI argument at startup")
+        elif line in ('on', '1', 'true', 'enable'):
+            self.dfs_auto_follow = True
+            LOG.info("DFS auto-follow enabled - cd into DFS links will create new SMB connections")
+        elif line in ('off', '0', 'false', 'disable'):
+            self.dfs_auto_follow = False
+            LOG.info("DFS auto-follow disabled - cd into DFS links will show referral info only")
+        else:
+            LOG.error("Usage: dfs_mode [on|off]")
+
+    def do_pwd(self, line):
+        if self.loggedIn is False:
+            LOG.error("Not logged in")
+            return
+        if self.is_dfs_context and self.dfs_target_info:
+            root = self.dfs_context_stack[0]
+            print("\\\\%s\\%s (DFS [depth=%d] -> \\\\%s\\%s%s)" % (
+                root['smb'].getRemoteHost(),
+                root['share'],
+                len(self.dfs_context_stack),
+                self.smb.getRemoteHost(),
+                self.share,
+                self.pwd.replace("\\", "/")))
+        else:
+            print(self.pwd.replace("\\","/"))
+        if self.outputfile is not None:
+            f = open(self.outputfile, 'a')
+            f.write(self.pwd.replace("\\","/"))
+            f.close()
+
+    def do_EOF(self, line):
+        print('Bye!\n')
+        return True
