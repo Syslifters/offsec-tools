@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../vendor-src/src/entries/graph-core.js"],
+  "sourcesContent": ["export function initGraphCore() {\n  if (window.__adalancheGraphCoreInitialized) {\n    return;\n  }\n  window.__adalancheGraphCoreInitialized = true;\n}\n"],
+  "mappings": ";AAAO,SAAS,gBAAgB;AAC9B,MAAI,OAAO,iCAAiC;AAC1C;AAAA,EACF;AACA,SAAO,kCAAkC;AAC3C;",
+  "names": []
+}
