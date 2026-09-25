@@ -1,0 +1,34 @@
+# ShareRules/Keep"
+- id: KeepDollarShares
+  type: Share
+  description:
+    Notifies the user that they can read C$ or ADMIN$ or something fun/noisy,
+    but doesn't actually scan inside it.
+  action: Keep
+  location: ShareName
+  patterns:
+    - ^C\$$
+    - ^ADMIN\$$
+  severity: Critical
+
+- id: KeepSCCMShares
+  type: Share
+  description:
+    Notifies the user that they can read SCCMContentLib$ so they can take
+    CMLoot for a spin.
+  action: Keep
+  location: ShareName
+  patterns:
+    - ^SCCMContentLib\$$
+  severity: Medium
+
+# ShareRules/Discard"
+- id: DiscardNonFileShares
+  type: Share
+  description: Skips scanning inside shares ending with these words.
+  action: Discard
+  location: ShareName
+  patterns:
+    - ^print\$$
+    - ^ipc\$$
+  severity: Info
