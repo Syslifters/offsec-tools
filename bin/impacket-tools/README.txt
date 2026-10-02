@@ -1,0 +1,3 @@
+﻿Impacket example tools ΓÇö portable bundle (embedded Python + shared site-packages).
+Run any tool by name, e.g. GetNPUsers.cmd -dc-ip 10.0.0.1 ...
+Launchers call python\python.exe next to this folder (no system Python required).
