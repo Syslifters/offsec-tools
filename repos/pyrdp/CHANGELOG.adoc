@@ -1,0 +1,462 @@
+= {project-name} Changelog
+:project-name: PyRDP
+:uri-repo: https://github.com/GoSecure/pyrdp
+:uri-issue: {uri-repo}/issues/
+
+This document provides a high-level view of the changes introduced in {project-name} by release.
+For a detailed view of what has changed, refer to the {uri-repo}/commits/master[commit history] on GitHub.
+
+== <version> - <releaseDate>
+
+=== Enhancements
+
+* Information about the date and time of capture was added to the GUI player ({uri-issue}489[#489])
+* Handles unknown NTSTATUS gracefully ({uri-issue}471[#471])
+* JSON logs field change: data becomes exceptionData
+
+
+== v2.1.0 - 2024-01-23
+
+Quality of [Serpent] Life
+
+=== Enhancements
+
+* Player GUI displays playback time and recording duration ({uri-issue}467[#467])
+
+=== Bug fixes
+
+* Clipboard file transfers compatibility with non-mstsc clients ({uri-issue}464[#464])
+* Some replay files when converted would be cut short ({uri-issue}466[#466])
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Olivier Bilodeau (@obilodeau) and @luciaprime54
+
+
+== v2.0.0 - 2023-12-22
+
+Winter's Break[ing changes]
+
+=== Release Highlights
+
+* PyPI pre-built packages for Linux, Windows and macOS (easier installation)
+* Ported to QT6
+* Docker images based on Ubuntu 22.04
+
+Full list of changes follows.
+
+=== Backwards Compatibility Changes
+
+* All tools lost their `.py` suffix. For example, `pyrdp-mitm.py` is now `pyrdp-mitm`.
+* Requires Python 3.7
+* master Docker container tag renamed devel (master-slim to devel-slim)
+* The log field `sessionID` changed format from `<firstname><100000-999999>` to `<adjective>_<name>_<1000000-9999999>` ({uri-issue}458[#458])
+* Stolen clipboard files are now stored hashed under the files/ hierarchy without sessionId and linked from filesystems/<sessionID>/clipboard/ hierarchy ({uri-issue}338[#338])
+* Python project name is now pyrdp-mitm since pyrdp was taken on PyPI ({uri-issue}456[#456])
+
+=== Enhancements
+
+* Pre-built binaries available on PyPI for Linux, Windows and macOS! ({uri-issue}451[#451])
+* PyRDP now runs with QT6 which is better supported than QT5 nowadays ({uri-issue}436[#436], {uri-issue}453[#453])
+* Support for RDP version 10.11 ({uri-issue}433[#433])
+* Support for Python 3.11 by updating PyAV to get pre-built binary wheels ({uri-issue}437[#437], {uri-issue}438[#438])
+* MITM start and termination log messages are now part of the JSON logs ({uri-issue}447[#447])
+* Docker images are now based on Ubuntu 22.04 and dependencies were minimized ({uri-issue}455[#455])
+* Documented how to run `pyrdp-convert` through a Docker container ({uri-issue}455[#455])
+* Fixed sessionID duplication caused by a bad name library and added an extra digit ({uri-issue}458[#458], {uri-issue}460[#460])
+* Stolen clipboard files are deduplicated (via hashing) just like mapped drives files ({uri-issue}338[#338], {uri-issue}462[#462])
+
+=== Bug fixes
+
+* JSON logging of files captured via the clipboard was fixed ({uri-issue}441[#441])
+* Fixed support for Windows on Python 3.8+ ({uri-issue}316[#316], {uri-issue}439[#439], {uri-issue}444[#444])
+* Updated Twisted's minimum version to 23 ({uri-issue}316[#316], {uri-issue}455[#455])
+* Added more missing dependencies for the GUI on Ubuntu 20.04 LTS ({uri-issue}448[#448])
+* Fixed installation issue on Windows with Python 3.11 ({uri-issue}436[#436])
+
+=== Infrastructure
+
+* Project packaging modernized, getting rid of `pkg_resources` deprecation warnings ({uri-issue}416[#416], {uri-issue}440[#440])
+* Added Python 3.10 tests on Windows to CI test configuration ({uri-issue}439[#439])
+* Then replaced Python 3.10 with Python 3.11 for CI test configuration ({uri-issue}438[#438])
+* Also added Ubuntu 20.04, 22.04 and Python 3.12 in CI test configurations ({uri-issue}455[#455])
+* Using cibuildwheel for cross-platform and cross-python builds Windows, Linux, macOS ({uri-issue}451[#451])
+* Deprecation cleanup in CI ({uri-issue}452[#452])
+* Updated our dependencies to the latest stable versions ({uri-issue}454[#454])
+* Renamed master branch to main ({uri-issue}450[#450], {uri-issue}459[#459])
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+@kszafran, Mason Shi (@Mas0nShi), Olivier Bilodeau (@obilodeau) and @plonxyz
+
+
+== v1.2.0 - 2022-12-23
+
+The Rudolph Desktop Protocol!
+
+Read the release blog post: https://www.gosecure.net/blog/2022/12/23/a-new-pyrdp-release-the-rudolph-desktop-protocol/
+
+=== Release Highlights
+
+* Net-NTLMv2 Hash Capture
+* 6x faster `pyrdp-convert`
+* RDP Version 10.9 and 10.10 supported
+* Python 3.10 support
+* Plugged memory leak and fixed important long-standing bugs
+
+Full list of changes follows.
+
+=== Backwards Compatibility Changes
+
+* Collected files are now stored as their SHA-256 hash value instead of SHA-1 ({uri-issue}389[#389])
+* The log field `shasum` now holds the SHA-256 hash value of files instead of SHA-1 ({uri-issue}389[#389])
+
+=== Security
+
+* Backported security fixes from rdesktop to our Python C extension doing RLE processing.
+  Exploitability wasn't verified. ({uri-issue}357[#357])
+
+=== Enhancements
+
+* Support for RDP version 10.9 and 10.10 ({uri-issue}396[#396], {uri-issue}397[#397])
+* Capture and log NetNTLMv2 hash if the server enforces NLA and we don't have the NLA redirection attack activated ({uri-issue}367[#367], {uri-issue}358[#358])
+* The Net-NTLMv2 challenge can be defined via `--ssp-challenge` allowing to do more efficient parallel cracking or leverage rainbow tables ({uri-issue}405[#405], {uri-issue}418[#418])
+* `pyrdp-convert` video conversion is now 6x faster! (See {uri-issue}349[#349])
+* `pyrdp-convert` video format can be viewed during encoding and will play even if the conversion process crashes or is halted ({uri-issue}352[#352], {uri-issue}353[#353])
+* `pyrdp-convert` can now handle exported PDUs (decrypted pcaps) with multiple sessions in them ({uri-issue}313[#313], {uri-issue}368[#368])
+* `pyrdp-convert` can now extract session information including keyboard and mouse movement information in JSON from pcap and PDUs ({uri-issue}331[#331], {uri-issue}366[#366])
+* `pyrdp-convert` has better success messages, error reporting and exit status ({uri-issue}361[#361], {uri-issue}369[#369])
+* `pyrdp-mitm` added `--address` argument to choose the IP address where PyRDP is listening ({uri-issue}411[#411], {uri-issue}412[#412])
+* Minor CLI improvements
+* Improved type hints
+* Updated instructions to extract the RDP certificate and private key ({uri-issue}345[#345])
+* Documentation updates ({uri-issue}335[#335], {uri-issue}339[#339], {uri-issue}340[#340], {uri-issue}360[#360], {uri-issue}371[#371], {uri-issue}381[#381], {uri-issue}383[#383], {uri-issue}384[#384], {uri-issue}408[#408], {uri-issue}420[#420])
+* Replaced unmaintained dependency notify2 with py-notifier ({uri-issue}363[#363], {uri-issue}365[#365])
+* Some Python 3.10 compatibility work ({uri-issue}366[#366], {uri-issue}380[#380], {uri-issue}421[#421])
+* Enable play/pause replay on the Player by pressing the Space key ({uri-issue}403[#403]).
+
+=== Bug fixes
+
+* Fixed situations where device redirection or clipboard sharing would hang and timeout ({uri-issue}139[#139], {uri-issue}422[#422])
+* Fixed a memory leak in the bitmap decoding routine preventing the conversion or the replay of very large captures ({uri-issue}352[#352], {uri-issue}353[#353])
+* Fixed `pyrdp-player` on macOS platforms ({uri-issue}362[#362])
+* Fixed `pyrdp-convert` pcap processing when victim IP and MITM IP are the same ({uri-issue}366[#366])
+* Fixed a `pyrdp-convert` segmentation fault in QT in some MP4 conversions ({uri-issue}378[#378], {uri-issue}428[#428], {uri-issue}429[#429])
+* Fixed NLA redirection problems if original target and NLA redirection target are the same ({uri-issue}342[#342], {uri-issue}343[#343])
+* Fixed leak of file descriptors due to missing close on replay file recording ({uri-issue}392[#392], {uri-issue}413[#413], {uri-issue}415[#415])
+* Added a missing dependency for the GUI on Ubuntu 20.04 LTS ({uri-issue}348[#348], {uri-issue}351[#351], {uri-issue}355[#355])
+* No longer assuming every connection will have VirtualChannels ({uri-issue}375[#375])
+* Some minor protocol-level fixes ({uri-issue}408[#408])
+
+=== Infrastructure
+
+* The slim flavor of our Docker image is now provided for the ARM64 platform ({uri-issue}346[#346], {uri-issue}388[#388])
+* Docker images are now built and pushed via GitHub Actions ({uri-issue}334[#334], {uri-issue}341[#341])
+* Added an automated video conversion test to CI configuration ({uri-issue}349[#349])
+* Added an automated JSON conversion test to CI configuration with some validation ({uri-issue}369[#369])
+* Added an automated replay conversion test to CI configuration ({uri-issue}369[#369])
+* Test refactoring to allow running most GitHub CI tests locally when developing ({uri-issue}368[#368])
+* Added Python 3.10 to CI test configuration ({uri-issue}387[#387])
+* Updated our dependencies to the latest stable versions ({uri-issue}386[#386], {uri-issue}391[#391], {uri-issue}400[#400], {uri-issue}414[#414], {uri-issue}417[#417])
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Alexandre Beaulieu (@alxbl), Lisandro Ubiedo (@lubiedo), Francis Labelle
+(@xshill),Lukas Kupczyk (@lkupczyk), Olivier Bilodeau (@obilodeau), simonhuang
+(@thelongestusernameofall), Jonas (@spameier) and https://flare.systems/[Flare Systems]
+
+
+== v1.1.0 - 2021-08-05
+
+Released just in time for our BlackHat USA Arsenal 2021 presentation! Here are
+the high-level release highlights:
+
+* Network-Level Authentication (NLA) redirection: if target is NLA redirect to a different non-NLA host
+  (see this as a dynamic downgrade attack)
+* Improved file collection capabilities: file deduplication, preserving client-side file hierarchies and preserve partial copies
+* More reliable, powerful and faster `pyrdp-convert`
+* Attempted credentials collection (NTLMSSP hashes in NLA context and plaintext otherwise)
+* Improved logging in error conditions and general bug fixes
+
+Full list of changes follows.
+
+=== Breaking Changes
+
+* `pyrdp-convert` command-line interface change: `--list` is now `--list-only` to better reflect what it does.
+  The short form `-l` didn't change. ({uri-issue}311[#311])
+* Log fields changes: `hash` is now `shasum` ({uri-issue}302[#302])
+
+=== Enhancements
+
+*Security*
+
+* Cryptography dependency updated to 3.3.2 due to upstream security issues which we are not really concerned about for this project's use case
+  (See {uri-issue}259[#259], {uri-issue}295[#295])
+* Pillow dependency updated to 8.2.0 due to upstream security issues (see {uri-issue}306[#306] and {uri-issue}317[#317])
+* rsa dependency updated to 4.7 due to upstream security issues (see {uri-issue}314[#314])
+
+*Tools*
+
+* `pyrdp-convert` now relies on scapy for session reconstruction from a pcap.
+  This is more reliable and can handle multiple sessions at once.
+  ({uri-issue}311[#311], {uri-issue}221[#221])
+* `pyrdp-convert` MP4 conversion is now 2x faster! (See {uri-issue}234[#234] and {uri-issue}273[#273])
+* Added a JSON output format to `pyrdp-convert` (See {uri-issue}236[#236])
+* Use a proper progress bar with completion percentage and ETA in `pyrdp-convert` (See {uri-issue}274[#274])
+
+*MITM*
+
+* NLA Redirection: if the original destination server requires NLA we can now redirect the connection to a different destination server as specified by the `--nla-redirection-host` and `--nla-redirection-port` switches ({uri-issue}260[#260], {uri-issue}308[#308])
+* Added NTLMSSP hash logging when NLA is used with NTLM as the authentication protocol.
+  Hashes are logged to `pyrdp_output/logs/ntlmssp.log` in addition to stdout and JSON.
+  (See {uri-issue}307[#307])
+* Added _attempted_ credentials logging when using graphical login (non-NLA).
+  It is using a heuristic of Enter being pressed or mouse being clicked in specific areas.
+  (See {uri-issue}303[#303])
+* PyRDP will log the value of the `HOST_IP` variable on start if it exists. You can set it to the IP address of the host running PyRDP. This is mostly helpful when you're using PyRDP in Docker and you want the IP of the Docker host in the logs.
+* Added detection function for BlueKeep scans / exploit attempts. PyRDP will log the attempt and shut down the connection. The JSON log has an exploitInfo attribute as well as a parserInfo attribute to help investigate what happened.
+* Added better logging for parser errors. PyRDP will now log which parser crashed and the data that was fed to that parser to make it crash. This makes it easier to investigate bugs and exploits. In JSON logs, this information shows up in the parserInfo attribute.
+* Files intercepted or crawled by the MITM are now named according to the sha1 hash of their contents and stored in the `pyrdp_output/files` folder (see {uri-issue}261[#261])
+* Files that are currently being downloaded by the MITM but are not complete are stored in the `pyrdp_output/files/tmp` folder
+* Both the file stealer and the file crawler components now mimick the victim's filesystem by creating the same file hierarchy in the `pyrdp_output/filesystems/<SESSION_ID>` folders.
+  Files in these folders are symbolic links to files in the `pyrdp_output/files` folder to avoid useless duplication.
+  The symlinks are relative, which allows you to move the folder around without losing the mapping.
+  (See {uri-issue}270[#270], {uri-issue}272[#272] and {uri-issue}299[#299])
+* File interceptor will keep a copy of interrupted file transfers in `pyrdp_output/files/tmp/` and mention it in the logs ({uri-issue}333[#333])
+* All JSON logs now have a `clientIp` field once a client IP address is known ({uri-issue}321[#321], {uri-issue}326[#326])
+* Removed `mapping.json` file since all the information it would contain can be obtained by checking the `pyrdp_output/filesystems` folder
+* Added tests for the DeviceRedirectionMITM and FileMapping classes ({uri-issue}268[#268])
+* Added `clientPort` field to the message when a new client is connected ({uri-issue}310[#310])
+
+=== Bug fixes
+
+* Added SO_REUSEADDR to MITM socket to avoid having to wait for sockets stuck in `TIME_WAIT`
+* Fixed a bug causing the connection to crash when the pointerCacheSize field is absent in PointerCapability (See {uri-issue}287[#287])
+* Fixed a bug causing the connection to crash when the client sends no connection negotiation flags (See {uri-issue}283[#283])
+* Fixed a bug preventing files opened by the RDPDR file stealer from being closed ({uri-issue}264[#264])
+* Fixed an issue with ghost mouse pointers in replays converted to MP4 ({uri-issue}271[#271])
+* Fixed a regression with the `--sensor-id` (`-s`) command line argument.
+  It would not work since 1.0. ({uri-issue}279[#279])
+* doc: README update to fix Windows install ({uri-issue}301[#301])
+* Now handling space characters in password attempts ({uri-issue}303[#303])
+* Fixed 'Too Many Files Open' situations ({uri-issue}265[#265], {uri-issue}309[#309])
+* `core.ssl` JSON logs now properly carry the `commonName` and `certFile` variables ({uri-issue}326[#326])
+* Fixed wrong date format string for sessions converted from a pcap ({uri-issue}330[#330], {uri-issue}332[#332])
+* Fixed a crash when deleting active file transfers on a disconnect ({uri-issue}322[#322], {uri-issue}333[#333])
+
+=== Infrastructure
+
+* Add automated tests to CI configuration
+* Fixed pip timeout issues when building full docker image on slow networks ({uri-issue}320[#320])
+* Updated our dependencies to the latest stable versions for Docker builds ({uri-issue}327[#327])
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Alexandre Beaulieu (@alxbl), @dependabot[bot], @exys228, Francis Labelle (@xshill), Olivier Bilodeau (@obilodeau)
+
+
+== 1.0.0 - 2020-10-19
+
+We added many interesting features in the last couple of months and have used this tool in enough contexts to officially mark it as stable.
+Some of the noteworthy features are described https://www.gosecure.net/blog/2020/10/20/announcing-pyrdp-1/[in our announcement blog post].
+
+This release has a dedicated SecTor 2020 presentation: https://sector.ca/sessions/achieving-pyrdp-1-0-the-remote-desktop-pwnage-mitm-and-library/[Achieving PyRDP 1.0 – The Remote Desktop Pwnage MITM and Library].
+
+=== Enhancements
+
+*Tools*
+
+* Introduced the `pyrdp-convert` tool to convert between pcaps, PyRDP replay files and MP4 video files.
+  Read link:README.md#using-pyrdp-convert[its section in the README for details].
+  See {uri-issue}199[#199], {uri-issue}188[#188] and {uri-issue}170[#170].
+
+*Player*
+
+* New `--headless` mode to output replay data to the terminal.
+  All GUI dependencies are now optional enabling further Docker image size reduction.
+  See {uri-issue}151[#151], {uri-issue}163[#163] and {uri-issue}190[#190].
+* Added window scaling support for session replays ({uri-issue}101[#101], {uri-issue}208[#208])
+
+*MITM*
+
+* Added support for dynamic certificate cloning when no certificate is specified. ({uri-issue}94[#94], {uri-issue}243[#243]).
+  This is enabled by default and can be overridden through the existing `-c` and `-k` arguments.
+* File interception now saves files transferred via clipboard copy/paste ({uri-issue}100[#100])
+* Added a transparent proxy mode where source or destination packets are unaltered from the client or the server's perspective.
+  See link:docs/transparent-proxy.md[feature documentation for details and usage examples].
+  See also {uri-issue}197[#197], {uri-issue}204[#204], {uri-issue}205[#205] and {uri-issue}239[#239].
+* Added support for Network Level Authentication (NLA) by passing CredSSP authentication untouched.
+  Activate it with the `--auth ssp` switch.
+  It requires the RDP server's private key which must be given to PyRDP.
+  See {uri-issue}229[#229] for details.
+* Support for 32-bit x86 operating systems when not using the graphical interface ({uri-issue}150[#150])
+* Added a `twistd` plugin ({uri-issue}174[#174], {uri-issue}177[#177], {uri-issue}191[#191])
+* Loosen up TLS version checks to allow a broader set of clients and server ({uri-issue}192[#192], {uri-issue}193[#193])
+* Explicitly disabled TLS 1.3 for now since we don't record TLS 1.3 master secrets yet ({uri-issue}116[#116], {uri-issue}193[#193])
+* Logging can be customized using configuration files ({uri-issue}191[#191])
+* Improvements on log correlation ({uri-issue}180[#180]):
+  - Added `replayfilename` to the connection report log entry
+  - Added `sessionID` to replay filename
+* Added several switches to selectively disable features of PyRDP:
+  - `--disable-active-clipboard` switch to prevent clipboard request injection
+  - `--no-downgrade` switch to prevent protocol downgrading where possible {uri-issue}189[#189]
+  - `--no-files` switch to prevent extracting transferred files {uri-issue}195[#195]
+* Added support for the GDI graphics as the default graphics pipeline.
+  The `--no-gdi` switch was added to force the previous behavior (bitmaps).
+  See {uri-issue}50[#50] and {uri-issue}209[#209] for details.
+
+=== Bug fixes
+
+* Python 3.8 supported by fixing a logging.Formatter misuse ({uri-issue}176[#176])
+* PyRDP no longer creates replay files for sessions with no activity ({uri-issue}169[#169], {uri-issue}207[#207])
+* Fixed stack traces in the player when attempting to print strings ending with a null character ({uri-issue}182[#182])
+* Removed NLA argument from `pyrdp-mitm`
+* Updated and clarified documentation ({uri-issue}165[#165], {uri-issue}166[#166], {uri-issue}172[#172])
+
+=== Infrastructure
+
+* Docker images are now based on Ubuntu 20.04 ({uri-issue}251[#251])
+* Docker image size reduced and split in default and `-slim` variants ({uri-issue}173[#173], {uri-issue}198[#198])
+* Improved docker caching for faster development iterations ({uri-issue}217[#217], {uri-issue}219[#219])
+* Changed default docker compose command now `pyrdp-mitm -h` to avoid confusing crash on `docker-compose up` ({uri-issue}173[#173])
+* Added continuous integration with GitHub Actions that builds docker images and runs basic smoke tests ({uri-issue}194[#194], {uri-issue}201[#201], {uri-issue}202[#202], {uri-issue}253[#253])
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Olivier Bilodeau (@obilodeau), Alexandre Beaulieu (@alxbl), Émilio Gonzalez (@res260), Francis Labelle (@xshill), @robeving, @sotebob
+
+
+== 0.4.1 - 2019-11-03
+
+Now with 100% public docker image!
+
+=== Enhancements
+
+* Improvements to our docker image ({uri-issue}156[#156], {uri-issue}157[#157], {uri-issue}160[#160])
+* Logging when Restricted Admin Mode is enabled on clients
+* Documentation improvements
+
+=== Bug fixes
+
+* Fixed libGL.so.1 missing in docker image ({uri-issue}138[#138], {uri-issue}159[#159])
+
+=== Release meta
+
+* Released by: Olivier Bilodeau
+* Release beer: Archibald's Triple Américaine limited edition from YUL Airport
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Émilio Gonzalez, Francis Labelle, Olivier Bilodeau, Ondrej Gersl
+
+
+== 0.4.0 - 2019-09-01
+
+Release just in time for our Derbycon talk!
+
+=== Enhancements
+
+* Add recursive folder download from the PyRDP Player and a queue to download files ({uri-issue}140[#140])
+* Add file crawler to automatically download files from the client drive using pattern files ({uri-issue}141[#141])
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Maxime Carbonneau
+
+
+== 0.3.0 - 2019-08-31
+
+A special BlackHat USA Arsenal 2019 release!
+
+* https://docs.google.com/presentation/d/17P_l2n-hgCehQ5eTWilru4IXXHnGIRTj4ftoW4BiX5A/edit?usp=sharing[BlackHat USA Arsenal 2019 slides]
+
+
+=== Enhancements
+
+* Added Windows support ({uri-issue}129[#129])
+* Improved documentation for operation with Bettercap ({uri-issue}107[#107])
+* Added a heuristics-based credential logger to enable credentials collection at scale ({uri-issue}106[#106])
+* Dependency update: Replaced pycrypto with pycryptodome ({uri-issue}128[#128])
+* UX improvements to the PyRDP-Player ({uri-issue}119[#119], {uri-issue}124[#124])
+* Improved handling of X224 Negotiation Failures like NLA ({uri-issue}102[#102])
+* Accept and log connections from scanners better ({uri-issue}136[#136])
+* Added BlueKeep specific detection and logging ({uri-issue}114[#114])
+* Added a log entry that summarizes a connection, useful to hunt specific connections ({uri-issue}117[#117])
+* Logging minor improvements ({uri-issue}123[#123], {uri-issue}112[#112])
+
+
+=== Bug fixes
+
+* Added support for RDP v10.7 in the connection handshake ({uri-issue}135[#135])
+* Fixed issue with `virtualenv` setup ({uri-issue}110[#110])
+* Fixed connections to Windows servers with RDS enabled ({uri-issue}118[#118])
+* Shared Folders: Fixed a case where DOSName had no nullbyte ({uri-issue}121[#121])
+
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Maxime Carbonneau, Émilio Gonzalez, Francis Labelle and Olivier Bilodeau
+
+
+
+== 0.2.0 - 2019-05-15
+
+A special _NorthSec 2019_ release just in time for
+https://github.com/xshill[Francis Labelle] and
+https://github.com/res260[Émilio Gonzalez]'s talk on {project-name}.
+
+* https://docs.google.com/presentation/d/1avcn8Sh2b3IE7AA0G9l7Cj5F1pxqizUm98IbXUo2cvY/edit#slide=id.g404b70030f_0_581[Presentation Slides]
+* https://youtu.be/5JztJzi-m48[Demo Video of a Session Takeover and more]
+* https://youtu.be/bU67tj1RkMA[Demo Video of a cmd.exe payload triggered on connection]
+* https://nsec.io/session/2019-welcome-to-the-jumble-improving-rdp-tooling-for-malware-analysis-and-pentesting.html[Abstract]
+
+=== Enhancements
+
+* Session takeover: take control of an active session with working mouse and keyboard
+* Client-side file browsing and downloading
+* Ability to run custom PowerShell or console commands on new connections (https://github.com/GoSecure/pyrdp#running-payloads-on-new-connections[documentation])
+* Easier integration with `virtualenv` ({uri-issue}84[#84])
+* Provided a simple Dockerfile for Docker image creation ({uri-issue}66[#66])
+* Documentation on how to combine with Bettercap (more on the way)
+* Important refactoring
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Etienne Lacroix, Olivier Bilodeau, Francis Labelle
+
+
+== 0.1.0 - 2018-12-20
+
+First release. See our
+https://www.gosecure.net/blog/2018/12/19/rdp-man-in-the-middle-smile-youre-on-camera[introductory
+blog post] for details.
+
+=== Credits
+
+Thanks to the following people who contributed to this release:
+
+Francis Labelle, Émilio Gonzalez, CoolAcid
+
+Special thanks to https://github.com/citronneur[Sylvain Peyrefitte] who
+created RDPy on which we initially based PyRDP. We eventually had to fork due
+to drastic changes in order to achieve the capabilities we were interested in
+building. That said, his initial architecture and base library choices should
+be recognized as they stood the test of time.

