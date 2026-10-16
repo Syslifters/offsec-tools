@@ -1,0 +1,28 @@
+name: Compile bloodyAD into standalone binary
+
+on:
+  push:
+    tags:        
+      - '*'
+  workflow_dispatch:
+      
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          pip install .
+          pip install pyinstaller
+      - name: Compile
+        run: pyinstaller --hidden-import unicrypto.backends.cryptography --hidden-import bloodyAD.cli_modules.add --hidden-import bloodyAD.cli_modules.get --hidden-import bloodyAD.cli_modules.remove --hidden-import bloodyAD.cli_modules.set --distpath . --onefile bloodyAD.py
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: bloodyAD.exe

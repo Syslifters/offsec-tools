@@ -1,0 +1,1186 @@
+# PostMatchRules"
+- id: DiscardPostMatchByName
+  type: File
+  description: Post-match check for specific filenames
+  action: Discard
+  location: FileName
+  patterns:
+    - ^credentialprovider\.idl$
+    - ^pspasswd64\.exe$
+    - ^pspasswd\.exe$
+    - ^psexec\.exe$
+    - ^psexec64\.exe$
+  severity: Info
+
+- id: DiscardPostMatchByPath
+  type: File
+  description: Post-match check for specific path elements
+  action: Discard
+  location: FilePath
+  patterns:
+    - Windows Kits\\10
+    - Git\\mingw64
+    - Git\\usr\\lib
+    - ProgramData\\Microsoft\\NetFramework\\BreadcrumbStore
+    - \.MSSQLSERVER\\MSSQL\\Binn\\Templates
+  severity: Info
+
+# Custom
+- id: KeepWritableNetlogon
+  type: File
+  description: Files that are writable and in the NETLOGON share.
+  action: Keep
+  location: ShareName
+  patterns:
+    - ^NETLOGON$
+  ntfs:
+    writable: true
+  severity: High
+
+# FileRules/Keep/Code"
+- id: KeepSlackTokensInCode
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - (xox[pboa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32})
+    - https://hooks.slack.com/services/T[a-zA-Z0-9_]{8}/B[a-zA-Z0-9_]{8}/[a-zA-Z0-9_]{24}
+  severity: High
+
+- id: KeepSqlAccountCreation
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - CREATE (USER|LOGIN) .{0,200} (IDENTIFIED BY|WITH PASSWORD)
+  severity: High
+
+#- id: KeepS3UriPrefixInCode
+#  type: File
+#  description: Files with content matching an AWS S3 or Apache Hadoop S3A URI Prefix
+#  action: Keep
+#  location: FileContent
+#  patterns:
+#    - s3[a]?:\/\/[a-zA-Z0-9\-\+\/]{2,16}
+#  severity: Medium
+
+- id: KeepAwsKeysInCode
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - aws[_\-\.]?key
+    - (\s|\'|\"|\^|=)(A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z2-7]{12,16}(\s|\'|\"|$)
+  severity: High
+
+- id: KeepDbConnStringPw
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - connectionstring.{1,200}passw
+  severity: Medium
+
+- id: KeepPassOrKeyInCode
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - passw?o?r?d\s*=\s*[\'\"][^\'\"]....
+    - api[Kk]ey\s*=\s*[\'\"][^\'\"]....
+    - passw?o?r?d?>\s*[^\s<]+\s*<
+    - passw?o?r?d?>.{3,2000}</pass
+    - '[\s]+-passw?o?r?d?'
+    - api[kK]ey>\s*[^\s<]+\s*<
+    - '[_\-\.]oauth\s*=\s*[\''\"][^\''\"]....'
+    - client_secret\s*=*\s*
+    - <ExtendedMatchKey>ClientAuth
+    - GIUserPassword
+  severity: High
+
+- id: KeepInlinePrivateKey
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - "-----BEGIN( RSA| OPENSSH| DSA| EC| PGP)? PRIVATE KEY( BLOCK)?-----"
+  severity: High
+
+# FileRules/Keep/Code/Cmd"
+- id: KeepCmdCredentials
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - passwo?r?d\s*=\s*[\'\"][^\'\"]....
+    - schtasks.{1,300}(/rp\s|/p\s)
+    - "net user "
+    - "psexec .{0,100} -p "
+    - "net use .{0,300} /user:"
+    - "cmdkey "
+  severity: High
+
+- id: RelayCmdByExtension
+  type: File
+  description:
+    Files with these extensions will be searched for cmd.exe/batch file
+    related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.bat
+    - \.cmd
+  relay:
+    - KeepCmdCredentials
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+  severity: Info
+
+# FileRules/Keep/Code/Python"
+- id: RelayPythonByExtension
+  type: File
+  description: Files with these extensions will be searched for python related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.py
+  relay:
+    - KeepPyDbConnStrings
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+- id: KeepPyDbConnStrings
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - mysql\.connector\.connect\(
+    - psycopg2\.connect\(
+  severity: High
+
+# FileRules/Keep/Code/Perl"
+- id: KeepPerlDbConnStrings
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - DBI\-\>connect\(
+  severity: High
+
+- id: RelayPerlByExtension
+  type: File
+  description: Files with these extensions will be searched for Perl related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.pl
+  relay:
+    - KeepPerlDbConnStrings
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+
+# FileRules/Keep/Code/Java"
+- id: RelayJavaByExtension
+  type: File
+  description:
+    Files with these extensions will be searched for Java and ColdFusion
+    related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.jsp$
+    - \.do$
+    - \.java$
+    - \.cfm$
+  relay:
+    - KeepJavaDbConnStrings
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+
+- id: KeepJavaDbConnStrings
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - '\.getConnection\(\"jdbc\:'
+    - passwo?r?d\s*=\s*[\'\"][^\'\"]....
+  severity: High
+
+# FileRules/Keep/Code/PHP"
+- id: KeepPhpByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - LocalSettings\.php
+  severity: High
+
+- id: RelayPhpByExtension
+  type: File
+  description: Files with these extensions will be searched for php related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.php
+    - \.phtml
+    - \.inc
+    - \.php3
+    - \.php5
+    - \.php7
+  relay:
+    - KeepPhpDbConnStrings
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+
+- id: KeepPhpDbConnStrings
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - mysql_connect\s*\(.*\$.*\)
+    - mysql_pconnect\s*\(.*\$.*\)
+    - mysql_change_user\s*\(.*\$.*\)
+    - pg_connect\s*\(.*\$.*\)
+    - pg_pconnect\s*\(.*\$.*\)
+  severity: High
+
+# FileRules/Keep/Code/PowerShell"
+- id: RelayPsByExtension
+  type: File
+  description:
+    Files with these extensions will be searched for PowerShell related
+    strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.psd1
+    - \.psm1
+    - \.ps1
+  relay:
+    - KeepPsCredentials
+    - KeepCmdCredentials
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+
+- id: KeepPsCredentials
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - -SecureString
+    - -AsPlainText
+    - \[Net.NetworkCredential\]::new\(
+  severity: High
+
+- id: KeepPSHistoryByName
+  type: File
+  description:
+    Files with these exact names will be searched for PowerShell related
+    strings.
+  action: Match
+  location: FileName
+  patterns:
+    - ConsoleHost_history\.txt
+    - Visual Studio Code Host_history\.txt
+  relay:
+    - KeepPsCredentials
+    - KeepCmdCredentials
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Low
+
+# FileRules/Keep/Code/ShellScript"
+- id: RelayShellScriptByExtension
+  type: File
+  description: Files with these extensions will be searched for Bash related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.netrc
+    - \.exports
+    - \.functions
+    - \.extra
+    - \.npmrc
+    - \.env
+    - \.bashrc
+    - \.profile
+    - \.zshrc
+    - \.bash_history
+    - \.zsh_history
+    - \.sh_history
+    - zhistory
+    - \.irb_history
+  relay:
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+  severity: Info
+
+# FileRules/Keep/Code/CSharpAndASP"
+- id: RelayCSharpByExtension
+  type: File
+  description:
+    Files with these extensions will be searched for CSharp and ASP.NET
+    related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.aspx$
+    - \.ashx$
+    - \.asmx$
+    - \.asp$
+    - \.cshtml$
+    - \.cs$
+    - \.ascx$
+    - \.config$
+  relay:
+    - KeepCSharpDbConnStringsYellow
+    - KeepCSharpDbConnStringsRed
+    - KeepCSharpViewstateKeys
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+    - KeepCSharpDbConnStringsRed
+    - KeepCSharpDbConnStringsYellow
+  severity: Info
+
+- id: KeepCSharpViewstateKeys
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - validationkey\s*=\s*[\'\"][^\'\"]....
+    - decryptionkey\s*=\s*[\'\"][^\'\"]....
+  severity: High
+
+- id: KeepCSharpDbConnStringsYellow
+  type: File
+  description:
+    Match SQL connection strings that appear to use integrated security
+    (so no passwords).
+  action: Keep
+  location: FileContent
+  patterns:
+    - Data Source=.+Integrated Security=(SSPI|true)
+    - Integrated Security=(SSPI|true);.*Data Source=.+
+  severity: Medium
+
+- id: KeepCSharpDbConnStringsRed
+  type: File
+  description: Match SQL connection strings that appear to have a password.
+  action: Keep
+  location: FileContent
+  patterns:
+    - Data Source=.+(;|)Password=.+(;|)
+    - Password=.+(;|)Data Source=.+(;|)
+  severity: High
+
+# FileRules/Keep/Code/GenericConfig"
+- id: KeepConfigByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - \.htpasswd$
+    - accounts\.v4$
+  severity: High
+
+- id: RelayConfigByExtension
+  type: File
+  description:
+    Files with these extensions will be subjected to a generic search for
+    keys and such.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.yaml$
+    - \.yml$
+    - \.toml$
+    - \.xml$
+    - \.json$
+    - \.config$
+    - \.ini$
+    - \.inf$
+    - \.cnf$
+    - \.conf$
+    - \.properties$
+    - \.env$
+    - \.dist$
+    - \.txt$
+    - \.sql$
+    - \.log$
+    - \.sqlite$
+    - \.sqlite3$
+    - \.fdb$
+    - \.tfvars$
+  relay:
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+
+# FileRules/Keep/Code/JavaScript"
+- id: RelayJsByExtension
+  type: File
+  description:
+    Files with these extensions will be searched for JavaScript related
+    strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.js$
+    - \.cjs$
+    - \.mjs$
+    - \.cs$
+    - \.ts$
+    - \.tsx$
+    - \.ls$
+    - \.es6$
+    - \.es$
+  relay:
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Info
+
+# FileRules/Keep/Code/VBScript"
+- id: RelayVBScriptByExtension
+  type: File
+  description:
+    Files with these extensions will be searched for cmd.exe/batch file
+    related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.vbs$
+    - \.vbe$
+    - \.wsf$
+    - \.wsc$
+    - \.asp$
+    - \.hta$
+  relay:
+    - KeepCmdCredentials
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+    - KeepCSharpDbConnStringsRed
+    - KeepCSharpDbConnStringsYellow
+  severity: Info
+
+# FileRules/Keep/Code/Ruby"
+- id: KeepRubyByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - database\.yml$
+    - \.secret_token\.rb$
+    - knife\.rb$
+    - carrierwave\.rb$
+    - omniauth\.rb$
+  severity: High
+
+- id: KeepRubyDbConnStrings
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - DBI\.connect\(
+  severity: High
+
+- id: RelayRubyByExtension
+  type: File
+  description: Files with these extensions will be searched for Rubby related strings.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.rb$
+  relay:
+    - KeepRubyDbConnStrings
+    - KeepAwsKeysInCode
+    - KeepInlinePrivateKey
+    - KeepPassOrKeyInCode
+    - KeepSlackTokensInCode
+    - KeepSqlAccountCreation
+    - KeepDbConnStringPw
+  severity: Low
+
+# FileRules/Keep/BusinessDocs/ByPartialName"
+- id: KeepNameContainsGreen
+  type: File
+  description: A description of what a rule does.
+  action: Keep
+  location: FileName
+  patterns:
+    - passw
+    - secret
+    - credential
+    - thycotic
+    - cyberark
+  severity: Low
+
+# FileRules/Keep/UserFiles/DotFiles"
+- id: KeepShellRcFilesByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - \.netrc$
+    - _netrc$
+    - \.exports$
+    - \.functions$
+    - \.extra$
+    - \.npmrc$
+    - \.env$
+    - \.bashrc$
+    - \.profile$
+    - \.zshrc$
+  severity: Low
+
+- id: KeepGitCredsByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - \.git-credentials$
+  severity: High
+
+- id: KeepShellHistoryByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - \.bash_history$
+    - \.zsh_history$
+    - \.sh_history$
+    - zhistory$
+    - \.irb_history$
+    - ConsoleHost_History\.txt$
+  severity: Low
+
+# FileRules/Keep/UserFiles/APIKeys"
+- id: KeepCloudApiKeysByPath
+  type: File
+  description: Files with a path containing these strings are very very interesting.
+  action: Keep
+  location: FilePath
+  patterns:
+    - \\\.aws\\
+    - doctl\\config.yaml$
+  severity: Critical
+
+- id: KeepCloudApiKeysByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - \.tugboat$
+  severity: Critical
+
+# FileRules/Keep/UserFiles/RemoteAccess"
+- id: RelayRdpByExtension
+  type: File
+  description: Look inside .rdp files for actual values.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.rdp$
+  relay:
+    - KeepRdpPasswords
+  severity: Info
+
+- id: KeepFtpClientConfigConfigByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - recentservers\.xml$
+    - sftp-config\.json$
+  severity: High
+
+- id: KeepRdpPasswords
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - password 51\:b
+  severity: High
+
+- id: KeepRemoteAccessConfByExtension
+  type: File
+  description: Files with these extensions are a little interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.rdg$
+    - \.rtsz$
+    - \.rtsx$
+    - \.ovpn$
+    - \.tvopt$
+    - \.sdtid$
+  severity: Medium
+
+- id: KeepRemoteAccessConfByName
+  type: File
+  description: Files with these exact names are very very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - mobaxterm\.ini$
+    - mobaxterm backup\.zip$
+    - confCons.xml$
+  severity: Critical
+
+# FileRules/Keep/UserFiles/SSH"
+- id: CertContentByEnding
+  type: File
+  description: Files ending like this will be grepped for private keys.
+  action: Match
+  location: FileName
+  patterns:
+    - _rsa$
+    - _dsa$
+    - _ed25519$
+    - _ecdsa$
+  relay:
+    - KeepInlinePrivateKey
+  severity: Info
+
+- id: KeepSSHFilesByPath
+  type: File
+  description: Files with a path containing these strings are very very interesting.
+  action: Keep
+  location: FilePath
+  patterns:
+    - \\\.ssh\\
+  severity: Critical
+
+- id: KeepSSHKeysByFileName
+  type: File
+  description: SSHKeys
+  action: Keep
+  location: FileName
+  patterns:
+    - ^id_rsa$
+    - ^id_dsa$
+    - ^id_ecdsa$
+    - ^id_ed25519$
+  severity: Critical
+
+- id: KeepSSHKeysByFileExtension
+  type: File
+  description: SSHKeys
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.ppk$
+  severity: Critical
+
+# FileRules/Keep/UserFiles/BrowserCreds"
+- id: KeepFfLoginsJsonRelay
+  type: File
+  description:
+    Files with these extensions will be searched for Firefox/Thunderbird
+    backups related strings.
+  action: Match
+  location: FileName
+  patterns:
+    - ^logins\.json$
+  relay:
+    - KeepFFRegexRed
+  severity: Info
+
+- id: KeepFFRegexRed
+  type: File
+  description: Files with contents matching these regexes are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - '"encryptedPassword":"[A-Za-z0-9+/=]+"'
+  severity: High
+
+# FileRules/Keep/UserFiles/PassMgrs"
+- id: KeepPasswordFilesByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^passwords\.txt$
+    - ^pass\.txt$
+    - ^accounts\.txt$
+    - ^passwords\.doc$
+    - ^pass\.doc$
+    - ^accounts\.doc$
+    - ^passwords\.xls$
+    - ^pass\.xls$
+    - ^accounts\.xls$
+    - ^passwords\.docx$
+    - ^pass\.docx$
+    - ^accounts\.docx$
+    - ^passwords\.xlsx$
+    - ^pass\.xlsx$
+    - ^accounts\.xlsx$
+    - ^secrets\.txt$
+    - ^secrets\.doc$
+    - ^secrets\.xls$
+    - ^secrets\.docx$
+    - ^BitlockerLAPSPasswords\.csv$
+    - ^secrets\.xlsx$
+  severity: High
+
+- id: KeepPassMgrsByExtension
+  type: File
+  description: Files with these extensions are very very interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.kdbx$
+    - \.kdb$
+    - \.psafe3$
+    - \.kwallet$
+    - \.keychain$
+    - \.agilekeychain$
+    - \.cred$
+  severity: Critical
+
+# FileRules/Keep/UserFiles/DBMgmt"
+- id: KeepDbMgtConfigByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - SqlStudio\.bin$
+    - \.mysql_history$
+    - \.psql_history$
+    - \.pgpass$
+    - \.dbeaver-data-sources\.xml$
+    - credentials-config\.json$
+    - dbvis\.xml$
+    - robomongo\.json$
+  severity: High
+
+# FileRules/Keep/Infrastructure"
+- id: RelayInfraConfigByExtension
+  type: File
+  description:
+    Files with these extensions will be subjected to a generic search for
+    keys and such.
+  action: Match
+  location: FileExtension
+  patterns:
+    - \.xml$
+    - \.json$
+    - \.config$
+    - \.ini$
+    - \.inf$
+    - \.cnf$
+    - \.conf$
+    - \.txt$
+  relay:
+    - KeepNetConfigCreds
+  severity: Info
+
+# FileRules/Keep/Infrastructure/WinHashes"
+- id: KeepWinHashesByName
+  type: File
+  description: Files with these exact names are very very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^NTDS.DIT$
+    - ^SYSTEM$
+    - ^SAM$
+    - ^SECURITY$
+  severity: Critical
+
+# FileRules/Keep/Infrastructure/PAMAndPwVault"
+- id: KeepCyberArkConfigsByName
+  type: File
+  description: Files with these exact names are very very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^Psmapp\.cred$
+    - ^psmgw\.cred$
+    - ^backup\.key$
+    - ^MasterReplicationUser\.pass$
+    - ^RecPrv\.key$
+    - ^ReplicationUser\.pass$
+    - ^Server\.key$
+    - ^VaultEmergency\.pass$
+    - ^VaultUser\.pass$
+    - ^Vault\.ini$
+    - ^PADR\.ini$
+    - ^PARAgent\.ini$
+    - ^CACPMScanner\.exe\.config$
+    - ^PVConfiguration\.xml$
+  severity: Critical
+
+- id: KeepCyberArkByExtension
+  type: File
+  description: Files with these extensions are QUITE interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - .cred$
+    - \.pass$
+  severity: High
+
+# FileRules/Keep/Infrastructure/Databases"
+- id: KeepDatabaseByExtension
+  type: File
+  description: Files with these extensions are a little interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.mdf$
+    - \.sdf$
+    - \.sqldump$
+    - \.bak$
+  severity: Medium
+
+# FileRules/Keep/Infrastructure/NixKerberos"
+- id: KeepKerberosCredentialsByName
+  type: File
+  description: Files with these names are interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^krb5cc_.*
+  severity: Medium
+
+- id: KeepKerberosCredentialsByExtension
+  type: File
+  description: Files with these extensions are interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.keytab$
+    - \.CCACHE$
+  severity: Medium
+
+# FileRules/Keep/Infrastructure/PacketCapture"
+- id: KeepPcapByExtension
+  type: File
+  description: Files with these extensions are a little interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.pcap$
+    - \.cap$
+    - \.pcapng$
+  severity: Medium
+
+# FileRules/Keep/Infrastructure/NixLocalHashes"
+- id: KeepNixLocalHashesByName
+  type: File
+  description: Files with these exact names are very very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^shadow$
+    - ^pwd\.db$
+    - ^passwd$
+  severity: Critical
+
+# FileRules/Keep/Infrastructure/Certificates"
+- id: RelayCertByExtension
+  type: File
+  description:
+    Files with these extensions will be parsed as x509 certificates to
+    see if they have private keys.
+  action: Discard
+  location: FileExtension
+  patterns:
+    - \.pem$
+    - \.der$
+    - \.pfx$
+    - \.pk12$
+    - \.p12$
+    - \.pkcs12$
+  severity: High
+
+# FileRules/Keep/Infrastructure/MemDumps"
+- id: KeepMemDumpByExtension
+  type: File
+  description: Files with these extensions are a little interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.dmp$
+  severity: High
+
+- id: KeepMemDumpByName
+  type: File
+  description: Files with these exact names are very very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^MEMORY\.DMP$
+    - ^hiberfil\.sys$
+    - ^lsass\.dmp$
+    - ^lsass\.exe\.dmp$
+  severity: Critical
+
+# FileRules/Keep/Infrastructure/InfraAsCode"
+- id: KeepInfraAsCodeByExtension
+  type: File
+  description: Files with these extensions are very very interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - \.cscfg$
+    - \.tfvars$
+  severity: High
+
+# FileRules/Keep/Infrastructure/CiCdStuff"
+- id: KeepJenkinsByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^jenkins\.plugins\.publish_over_ssh\.BapSshPublisherPlugin\.xml$
+    - ^credentials\.xml$
+  severity: High
+
+# FileRules/Keep/Infrastructure/NetworkDevice"
+- id: KeepNetConfigCreds
+  type: File
+  description: A description of what a rule does.
+  action: Keep
+  location: FileContent
+  patterns:
+    - NVRAM config last updated
+    - enable password \.
+    - simple-bind authenticated encrypt
+    - "pac key [0-7] "
+    - snmp-server community\s.+\sRW
+  severity: High
+
+- id: KeepNetConfigFileByName
+  type: File
+  description: Files with these exact names are very very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^running-config\.cfg$
+    - ^startup-config\.cfg$
+    - ^running-config$
+    - ^startup-config$
+  severity: Critical
+
+- id: RelayNetConfigByName
+  type: File
+  description: Files with these name patterns will be searched for Cisco bits.
+  action: Match
+  location: FileName
+  patterns:
+    - cisco
+    - router
+    - firewall
+    - switch
+  relay:
+    - KeepNetConfigCreds
+  severity: Info
+
+# FileRules/Keep/Infrastructure/FTPServers"
+- id: KeepFtpServerConfigByName
+  type: File
+  description: Files with these exact names are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - ^proftpdpasswd$
+    - ^filezilla\.xml$
+  severity: High
+
+# FileRules/Keep/Infrastructure/DeploymentAutomation"
+- id: KeepDefenderConfigByName
+  type: File
+  description: Files containing Defender Configs are very interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - SensorConfiguration.json$
+    - mdatp_managed.json$
+  severity: Medium
+
+- id: KeepDomainJoinCredsByName
+  type: File
+  description: Files containing Domain Join Credes are quite interesting.
+  action: Keep
+  location: FileName
+  patterns:
+    - customsettings.ini$
+  severity: Medium
+
+- id: KeepSCCMBootVarCredsByPath
+  type: File
+  description: Files with a path containing these strings are very interesting.
+  action: Keep
+  location: FilePath
+  patterns:
+    - REMINST\\SMSTemp\\.*\.var$
+    - SMS\\data\\Variables.dat$
+    - SMS\\data\\Policy.xml$
+  severity: High
+
+- id: KeepDeployImageByExtension
+  type: File
+  description: Files with these extensions are a little interesting.
+  action: Keep
+  location: FileExtension
+  patterns:
+    - ^\.wim$
+    - ^\.ova$
+    - ^\.ovf$
+  severity: Medium
+
+- id: KeepDomainJoinCredsByPath
+  type: File
+  description: Files with a path containing these strings are very interesting.
+  action: Keep
+  location: FilePath
+  patterns:
+    - control\\customsettings.ini$
+  severity: High
+
+- id: RelayUnattendXml
+  type: File
+  description: Look inside unattend.xml files for actual values.
+  action: Match
+  location: FileName
+  patterns:
+    - ^unattend\.xml$
+    - ^Autounattend\.xml$
+  relay:
+    - KeepUnattendXmlRegexRed
+  severity: Info
+
+- id: KeepUnattendXmlRegexRed
+  type: File
+  description: Files with contents matching these regexen are very interesting.
+  action: Keep
+  location: FileContent
+  patterns:
+    - (?s)<AdministratorPassword>.{0,30}<Value>.*<\/Value>
+    - (?s)<AutoLogon>.{0,30}<Value>.*<\/Value>
+  severity: High
+
+# FileRules/Discard"
+- id: DiscardByFileExtension
+  type: File
+  description: Skip any further scanning for files with these extensions.
+  action: Discard
+  location: FileExtension
+  patterns:
+    - \.bmp$
+    - \.eps$
+    - \.gif$
+    - \.ico$
+    - \.jfi$
+    - \.jfif$
+    - \.jif$
+    - \.jpe$
+    - \.jpeg$
+    - \.jpg$
+    - \.png$
+    - \.psd$
+    - \.svg$
+    - \.tif$
+    - \.tiff$
+    - \.webp$
+    - \.xcf$
+    - \.ttf$
+    - \.otf$
+    - \.lock$
+    - \.css$
+    - \.less$
+    - \.admx$
+    - \.adml$
+    - \.xsd$
+    - \.nse$
+    - \.xsl$
+  severity: Info
+
+- id: DiscardByFileName
+  type: File
+  description: Skip any further scanning for files with these names.
+  action: Discard
+  location: FileName
+  patterns:
+    - ^jmxremote\.password\.template$
+    - ^sceregvl\.inf$
+  severity: Info
+# Could not convert rule: FileRules/Keep/Code/ShellScript/KeepShellScriptCredentials.toml"

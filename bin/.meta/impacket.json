@@ -1,0 +1,6 @@
+﻿{
+    "name":  "impacket",
+    "maintainer":  "fortra",
+    "git_repo":  "https://github.com/fortra/impacket/",
+    "commit":  "75938fcb0145b476250940d740f71394676288cb"
+}
