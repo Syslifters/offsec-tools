@@ -1,0 +1,6 @@
+﻿{
+    "name":  "mimikatz",
+    "maintainer":  "gentilkiwi",
+    "git_repo":  "https://github.com/gentilkiwi/mimikatz.git",
+    "commit":  "9182d90b613fa472c7b8feb3fd716b4b98a2859b"
+}

@@ -1,0 +1,32 @@
+# This is an example of how you could use pyRDP with docker-compose.
+
+version: "3"
+services:
+  pyrdp:
+    image: gosecure/pyrdp:latest
+    # Slim image (no GUI pyrdp-player, no pyrdp-convert)
+    #image: gosecure/pyrdp:latest-slim
+    # Uncomment a build section if you want to build your own image
+    # Full image
+    #build: .
+    # Slim image (no pyrdp-player without --headless and no pyrdp-convert)
+    #build:
+    #  context: .
+    #  dockerfile: Dockerfile.slim
+
+    # Uncomment this section only if you want to run the player.
+    # This allows the GUI of the player to be displayed on the host screen and
+    # stops Qt from using the MITM-SHM X11 Shared Memory Extension.
+    #environment: 
+    #  - DISPLAY
+    #  - QT_X11_NO_MITSHM=1
+    # This exposes the host's network to the docker. Keep in mind this could be dangerous if you deploy
+    # the tool for a honeypot on the internet.
+    #network_mode: "host"
+    volumes:
+      # The path before the ':' is the destination of the log on the host side.
+     - ./pyrdp_log:/home/pyrdp/log
+     # Place the command you want to execute here:
+     # ex: pyrdp-player
+     # ex: pyrdp-mitm
+    command: ["pyrdp-mitm", "-h"]
