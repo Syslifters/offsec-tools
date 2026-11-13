@@ -1,0 +1,6 @@
+﻿{
+    "name":  "SharpHound",
+    "maintainer":  "BloodHoundAD",
+    "git_repo":  "https://github.com/BloodHoundAD/SharpHound.git",
+    "commit":  "d82326c2a0ac068a87718c7ad7f214a4f0969c53"
+}
