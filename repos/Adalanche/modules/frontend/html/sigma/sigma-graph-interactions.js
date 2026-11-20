@@ -1,0 +1,301 @@
+(function () {
+  const RenderMetrics = (typeof window !== "undefined" && window.WorkspaceRenderMetrics)
+    ? window.WorkspaceRenderMetrics
+    : null;
+  const debugEnabled = typeof window !== "undefined" && /\bdebug=1\b/.test(String((window.location && window.location.search) || ""));
+
+  if (!RenderMetrics) {
+    return;
+  }
+
+  function debugLog(label, payload) {
+    if (!debugEnabled || typeof console === "undefined" || typeof console.debug !== "function") return;
+    console.debug(`[workspace debug ${label}]`, payload || {});
+  }
+
+  function createWorkspaceSigmaInteractions(graph) {
+    const listeners = [];
+    // Sigma picks edges on the GPU and tells us when the pointer enters or
+    // leaves one; clicks and the hover card use the edge it last entered.
+    let pointerEdgeId = "";
+
+    function bind(target, eventName, handler, options) {
+      if (!target || typeof target.addEventListener !== "function") return;
+      target.addEventListener(eventName, handler, options);
+      listeners.push(() => target.removeEventListener(eventName, handler, options));
+    }
+
+    function eventTargetsGraphSurface(event) {
+      const container = graph && graph.container;
+      if (!container || !event) return false;
+      if (typeof event.composedPath === "function") {
+        const path = event.composedPath();
+        if (Array.isArray(path) && path.includes(container)) return true;
+      }
+      const target = event.target;
+      return !!(target && typeof container.contains === "function" && container.contains(target));
+    }
+
+    function handleClick(event) {
+      if (graph.suppressNextClick) {
+        graph.suppressNextClick = false;
+        return;
+      }
+      const point = graph.relativePoint(event);
+      const nodeId = graph.getNodeAtPosition(point.x, point.y) || graph.hoveredNodeId || "";
+      if (nodeId) {
+        graph.notify("nodeclick", {
+          nodeId,
+          originalEvent: event,
+          viewportPosition: point,
+          clientPosition: RenderMetrics.eventClientPosition(event),
+        });
+        return;
+      }
+      graph.hoveredNodeId = "";
+      const edgeId = pointerEdgeId;
+      if (edgeId) {
+        graph.notify("edgeclick", {
+          edgeId,
+          originalEvent: event,
+          viewportPosition: point,
+          clientPosition: RenderMetrics.eventClientPosition(event),
+        });
+        return;
+      }
+      graph.notify("backgroundclick", {
+        originalEvent: event,
+        viewportPosition: point,
+        clientPosition: RenderMetrics.eventClientPosition(event),
+      });
+    }
+
+    function handleContextMenu(event) {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
+      const point = graph.relativePoint(event);
+      const nodeId = graph.getNodeAtPosition(point.x, point.y) || graph.hoveredNodeId || "";
+      if (nodeId) {
+        graph.notify("nodecontextmenu", {
+          nodeId,
+          originalEvent: event,
+          viewportPosition: point,
+          clientPosition: RenderMetrics.eventClientPosition(event),
+        });
+        return;
+      }
+      const edgeId = pointerEdgeId;
+      if (edgeId) {
+        graph.notify("edgecontextmenu", {
+          edgeId,
+          originalEvent: event,
+          viewportPosition: point,
+          clientPosition: RenderMetrics.eventClientPosition(event),
+        });
+      }
+    }
+
+    // Sigma 4 pans the camera from pointerdown on the container and drags
+    // nodes itself. These handlers take pointer events in the capture phase,
+    // so a shift-press for the selection box is ours before sigma sees it.
+    // Touch stays with sigma.
+    function isTouch(event) {
+      return !!(event && event.pointerType === "touch");
+    }
+
+    function handleMouseDown(event) {
+      if (isTouch(event)) return;
+      if (event && event.button === 0 && event.shiftKey) {
+        const point = graph.relativePoint(event);
+        graph.selectionState = {
+          startX: point.x,
+          startY: point.y,
+          currentX: point.x,
+          currentY: point.y,
+          moved: false,
+        };
+        graph.overlays.updateSelectionLayer();
+        event.preventDefault();
+        if (typeof event.stopPropagation === "function") event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      }
+    }
+
+    function handleMouseMove(event) {
+      if (isTouch(event)) return;
+      const point = graph.relativePoint(event);
+      if (pointerEdgeId && !graph.selectionState && eventTargetsGraphSurface(event)) {
+        // The hover card follows the pointer along the edge.
+        notifyEdgeHover(pointerEdgeId, true, point, event);
+      }
+      if (graph.selectionState) {
+        const dx = Number(point.x || 0) - Number(graph.selectionState.startX || 0);
+        const dy = Number(point.y || 0) - Number(graph.selectionState.startY || 0);
+        graph.selectionState.currentX = point.x;
+        graph.selectionState.currentY = point.y;
+        graph.selectionState.moved = graph.selectionState.moved || ((dx * dx) + (dy * dy) >= 16);
+        graph.overlays.updateSelectionLayer();
+        event.preventDefault();
+        if (typeof event.stopPropagation === "function") event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      }
+    }
+
+    function handleMouseUp(event) {
+      if (isTouch(event)) return;
+      if (graph.selectionState) {
+        const point = graph.relativePoint(event);
+        graph.selectionState.currentX = point.x;
+        graph.selectionState.currentY = point.y;
+        const moved = !!graph.selectionState.moved;
+        const rect = graph.overlays.selectionRect();
+        graph.selectionState = null;
+        graph.overlays.hideSelectionLayer();
+        event.preventDefault();
+        if (typeof event.stopPropagation === "function") event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+        if (moved && rect) {
+          graph.suppressNextClick = true;
+          graph.notify("selectionbox", {
+            originalEvent: event,
+            viewportPosition: point,
+            clientPosition: RenderMetrics.eventClientPosition(event),
+            nodeIds: graph.nodeIDsInViewportRect(rect),
+            appendSelection: true,
+          });
+        }
+      }
+    }
+
+    function installSigmaEvents() {
+      if (graph.renderer && typeof graph.renderer.on === "function") {
+        graph.renderer.on("afterRender", () => graph.overlays.queueIconSync());
+        graph.renderer.on("enterNode", (event) => {
+          const id = String(event && event.node ? event.node : "");
+          if (!id) return;
+          graph.hoveredNodeId = id;
+          graph.notify("nodehoverchanged", {
+            nodeId: id,
+            hovered: true,
+            originalEvent: event && event.event ? event.event : {},
+          });
+        });
+        graph.renderer.on("leaveNode", (event) => {
+          const id = String(event && event.node ? event.node : "");
+          if (!id) return;
+          if (graph.hoveredNodeId === id) graph.hoveredNodeId = "";
+          graph.notify("nodehoverchanged", {
+            nodeId: id,
+            hovered: false,
+            originalEvent: event && event.event ? event.event : {},
+          });
+        });
+        graph.renderer.on("enterEdge", (event) => {
+          const id = String(event && event.edge ? event.edge : "");
+          if (!id) return;
+          pointerEdgeId = id;
+          const coords = event.event || {};
+          notifyEdgeHover(id, true, { x: coords.x, y: coords.y }, coords.original);
+        });
+        graph.renderer.on("leaveEdge", (event) => {
+          const id = String(event && event.edge ? event.edge : "");
+          if (!id) return;
+          if (pointerEdgeId === id) pointerEdgeId = "";
+          const coords = event.event || {};
+          notifyEdgeHover(id, false, { x: coords.x, y: coords.y }, coords.original);
+        });
+        // Sigma drags nodes; a selected node takes the selection along.
+        graph.renderer.setSettings({
+          enableNodeDrag: true,
+          getDraggedNodes: (node) => (graph.selectedNodeIDsSet.has(node)
+            ? Array.from(graph.selectedNodeIDsSet).filter((id) => graph.graph.hasNode(id))
+            : [node]),
+          dragPositionToAttributes: (position, node) => {
+            graph.setNodePosition(node, position, { markDirty: true });
+            return { x: position.x, y: position.y };
+          },
+        });
+        const dragPayload = (event) => {
+          const original = event && event.event ? event.event.original || {} : {};
+          return {
+            nodeId: String(event.node),
+            nodeIds: Array.from(event.allDraggedNodes || [event.node], String),
+            originalEvent: original,
+            viewportPosition: { x: event.event.x, y: event.event.y },
+            clientPosition: RenderMetrics.eventClientPosition(original),
+          };
+        };
+        graph.renderer.on("nodeDragStart", (event) => graph.notify("nodedragstart", dragPayload(event)));
+        graph.renderer.on("nodeDragEnd", (event) => {
+          // The browser still sends a click for the press the drag began with.
+          graph.suppressNextClick = true;
+          graph.notify("nodedragend", { ...dragPayload(event), position: graph.nodePosition(String(event.node)) });
+        });
+        graph.renderer.on("rightClickNode", (event) => {
+          const id = String(event && event.node ? event.node : "");
+          if (!id) return;
+          const originalEvent = event && event.event ? event.event : {};
+          graph.notify("nodecontextmenu", {
+            nodeId: id,
+            originalEvent,
+            viewportPosition: graph.relativePoint(originalEvent),
+            clientPosition: RenderMetrics.eventClientPosition(originalEvent),
+          });
+        });
+      }
+
+      const target = graph.container;
+      bind(target, "click", handleClick, true);
+      bind(target, "contextmenu", handleContextMenu, true);
+      bind(target, "pointerdown", handleMouseDown, true);
+      bind(window, "pointermove", handleMouseMove, true);
+      bind(window, "pointerup", handleMouseUp, true);
+
+      const camera = graph.renderer.getCamera();
+      if (camera && typeof camera.on === "function") {
+        camera.on("updated", () => {
+          const ratio = Number(camera.getState && camera.getState().ratio);
+          if (Number.isFinite(ratio) && ratio > 0) {
+            graph.zoomValue = 1 / ratio;
+          }
+          const nextIconVisibility = typeof graph.iconRenderingEnabled === "function"
+            ? graph.iconRenderingEnabled()
+            : true;
+          if (graph.iconRenderVisible !== nextIconVisibility) {
+            graph.refresh();
+          }
+          graph.overlays.queueIconSync();
+          graph.notify("viewportchanged", {
+            zoom: graph.zoomValue,
+            pan: graph.pan(),
+            cause: "camera",
+          });
+        });
+      }
+    }
+
+    function notifyEdgeHover(edgeId, hovered, point, originalEvent) {
+      debugLog(hovered ? "edge.hover" : "edge.leave", { edgeId });
+      graph.notify("edgehoverchanged", {
+        edgeId,
+        hovered,
+        originalEvent: originalEvent || {},
+        viewportPosition: point,
+        clientPosition: RenderMetrics.eventClientPosition(originalEvent),
+      });
+    }
+
+    return {
+      install() {
+        installSigmaEvents();
+      },
+      destroy() {
+        while (listeners.length > 0) {
+          const unbind = listeners.pop();
+          unbind();
+        }
+      },
+    };
+  }
+
+  window.createWorkspaceSigmaInteractions = createWorkspaceSigmaInteractions;
+}());
